@@ -479,7 +479,37 @@ END
 $$;
 
 
+-- =========================
+-- Registrar Accounts Table
+-- =========================
+-- Stores API credentials for registrar providers (OVH, Hostinger, etc.)
+-- Used for automatic domain import functionality
+
+CREATE TABLE IF NOT EXISTS "public"."registrar_accounts" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid DEFAULT 'a0000000-aaaa-42a0-a0a0-00a000000a69',
+    provider_name text NOT NULL,
+    label text,
+    credentials jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    last_sync_at timestamp with time zone,
+    CONSTRAINT registrar_accounts_pkey PRIMARY KEY (id),
+    CONSTRAINT registrar_accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES "public"."users" (id) ON DELETE CASCADE
+);
+
+-- Index for user_id in registrar_accounts
+CREATE INDEX IF NOT EXISTS idx_registrar_accounts_user_id ON "public"."registrar_accounts" (user_id);
+
+-- Index for provider_name in registrar_accounts
+CREATE INDEX IF NOT EXISTS idx_registrar_accounts_provider_name ON "public"."registrar_accounts" (provider_name);
+
+-- Comment on table
+COMMENT ON TABLE "public"."registrar_accounts" IS 'Stores API credentials for registrar providers (OVH, Hostinger) for automatic domain import';
+
+-- =========================
 -- Final adjustments and default grants
+-- =========================
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "public" TO "postgres";
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "public" TO "postgres";
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA "public" TO "postgres";

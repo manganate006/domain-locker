@@ -38,15 +38,26 @@
           <div class="button-wrap">
             <div class="flex flex-col fit-content w-fit">
               <p class="m-0 text-xs">Looking to import many domains?</p>
-              <a pButton
-                routerLink="/domains/add/bulk-add"
-                label="Bulk Add"
-                class="p-button-link text-xs w-fit p-1 mt-1 no-underline"
-                icon="pi pi-file-import"
-                [outlined]="true"
-                [text]="true"
-                severity="secondary">
-            </a>
+              <div class="flex gap-2">
+                <a pButton
+                  routerLink="/domains/add/bulk-add"
+                  label="Bulk Add"
+                  class="p-button-link text-xs w-fit p-1 mt-1 no-underline"
+                  icon="pi pi-file-import"
+                  [outlined]="true"
+                  [text]="true"
+                  severity="secondary">
+                </a>
+                <a pButton
+                  routerLink="/domains/add/registrar-import"
+                  label="Import from Registrar"
+                  class="p-button-link text-xs w-fit p-1 mt-1 no-underline"
+                  icon="pi pi-cloud-download"
+                  [outlined]="true"
+                  [text]="true"
+                  severity="secondary">
+                </a>
+              </div>
             </div>
             <button pButton
               type="button"

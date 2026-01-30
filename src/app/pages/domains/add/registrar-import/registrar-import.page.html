@@ -1,0 +1,411 @@
+<div class="card registrar-import-wrap">
+  <h2>Import from Registrar</h2>
+  <p-steps
+    [model]="[
+      { label: 'Select Provider' },
+      { label: 'Select Domains' },
+      { label: 'Importing' },
+      { label: 'Summary' }
+    ]"
+    [activeIndex]="step - 1"
+  ></p-steps>
+
+  <p-card>
+    <ng-container [ngSwitch]="step">
+      <!-- Step 1: Select Provider -->
+      <div *ngSwitchCase="1" class="step-content">
+        <div class="mb-4">
+          <h3>Select a Registrar Provider</h3>
+          <p>
+            Choose a registrar to import domains from. You can use a saved
+            account or enter credentials manually.
+          </p>
+        </div>
+
+        <form [formGroup]="selectionForm">
+          <!-- Provider Selection -->
+          <div class="field mb-4">
+            <label for="provider" class="block font-semibold mb-2"
+              >Registrar Provider</label
+            >
+            <p-dropdown
+              id="provider"
+              formControlName="provider"
+              [options]="availableProviders"
+              optionLabel="displayName"
+              optionValue="name"
+              placeholder="Select a provider"
+              [filter]="true"
+              filterBy="displayName"
+              [showClear]="true"
+              (onChange)="onProviderChange($event.value)"
+              styleClass="w-full"
+            >
+              <ng-template let-provider pTemplate="item">
+                <div class="flex align-items-center gap-2">
+                  <span class="font-semibold">{{ provider.displayName }}</span>
+                  <small class="text-gray-400">{{ provider.description }}</small>
+                </div>
+              </ng-template>
+            </p-dropdown>
+          </div>
+
+          <!-- Account Selection (if accounts exist for this provider) -->
+          <div
+            *ngIf="selectedProvider && getAccountsForSelectedProvider().length > 0"
+            class="field mb-4"
+          >
+            <label for="account" class="block font-semibold mb-2"
+              >Saved Account</label
+            >
+            <p-dropdown
+              id="account"
+              formControlName="account"
+              [options]="getAccountsForSelectedProvider()"
+              optionLabel="label"
+              optionValue="id"
+              placeholder="Select a saved account or enter credentials manually"
+              [showClear]="true"
+              (onChange)="onAccountChange($event.value)"
+              styleClass="w-full"
+            >
+              <ng-template let-account pTemplate="item">
+                <div class="flex align-items-center gap-2">
+                  <span>{{ account.label || 'Account ' + account.id.substring(0, 8) }}</span>
+                  <small class="text-gray-400">Added {{ account.created_at | date: 'short' }}</small>
+                </div>
+              </ng-template>
+            </p-dropdown>
+
+            <div class="mt-2">
+              <p-checkbox
+                [(ngModel)]="useManualCredentials"
+                [ngModelOptions]="{ standalone: true }"
+                [binary]="true"
+                inputId="useManual"
+                label="Enter credentials manually"
+              ></p-checkbox>
+            </div>
+          </div>
+
+          <!-- Manual Credentials Form -->
+          <div
+            *ngIf="selectedProvider && (useManualCredentials || getAccountsForSelectedProvider().length === 0)"
+            class="manual-credentials mt-4"
+          >
+            <h4>Enter Credentials</h4>
+            <p class="text-sm text-gray-400 mb-4">
+              <a [href]="selectedProvider.docsUrl" target="_blank" class="text-primary">
+                <i class="pi pi-external-link mr-1"></i>
+                {{ selectedProvider.displayName }} API Documentation
+              </a>
+            </p>
+
+            <form [formGroup]="manualCredentialsForm">
+              <div
+                *ngFor="let field of selectedProvider.credentialFields"
+                class="field mb-4"
+              >
+                <label [for]="field.key" class="block font-semibold mb-2">
+                  {{ field.label }}
+                  <span *ngIf="field.required" class="text-red-400">*</span>
+                </label>
+                <input
+                  *ngIf="field.type === 'text'"
+                  [id]="field.key"
+                  pInputText
+                  [formControlName]="field.key"
+                  [placeholder]="field.placeholder || ''"
+                  class="w-full"
+                />
+                <p-password
+                  *ngIf="field.type === 'password'"
+                  [id]="field.key"
+                  [formControlName]="field.key"
+                  [placeholder]="field.placeholder || ''"
+                  [toggleMask]="true"
+                  [feedback]="false"
+                  styleClass="w-full"
+                ></p-password>
+                <input
+                  *ngIf="field.type === 'email'"
+                  [id]="field.key"
+                  pInputText
+                  type="email"
+                  [formControlName]="field.key"
+                  [placeholder]="field.placeholder || ''"
+                  class="w-full"
+                />
+                <small *ngIf="field.helpText" class="block text-gray-400 mt-1">
+                  {{ field.helpText }}
+                </small>
+              </div>
+            </form>
+          </div>
+
+          <!-- No accounts message -->
+          <div
+            *ngIf="selectedProvider && getAccountsForSelectedProvider().length === 0"
+            class="mt-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded"
+          >
+            <p class="text-sm">
+              <i class="pi pi-info-circle mr-2"></i>
+              No saved accounts for {{ selectedProvider.displayName }}.
+              <a
+                (click)="goToAccountSettings()"
+                class="text-primary cursor-pointer hover:underline"
+              >
+                Add one in settings
+              </a>
+              or enter credentials manually above.
+            </p>
+          </div>
+        </form>
+
+        <div class="button-wrap mt-6">
+          <p-button
+            label="Fetch Domains"
+            icon="pi pi-cloud-download"
+            (onClick)="fetchDomains()"
+            [disabled]="!selectedProvider || isFetching"
+            [loading]="isFetching"
+          ></p-button>
+        </div>
+      </div>
+
+      <!-- Step 2: Select Domains -->
+      <div *ngSwitchCase="2" class="step-content">
+        <div class="mb-4">
+          <h3>Select Domains to Import</h3>
+          <p>
+            Found <strong>{{ fetchedDomains.length }}</strong> domains.
+            Select the ones you want to import.
+          </p>
+        </div>
+
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex gap-2">
+            <p-button
+              label="Select All"
+              icon="pi pi-check-square"
+              styleClass="p-button-sm p-button-outlined"
+              (onClick)="toggleSelectAll(true)"
+            ></p-button>
+            <p-button
+              label="Deselect All"
+              icon="pi pi-square"
+              styleClass="p-button-sm p-button-outlined"
+              (onClick)="toggleSelectAll(false)"
+            ></p-button>
+          </div>
+          <span class="text-sm">
+            <strong>{{ selectedCount }}</strong> of {{ fetchedDomains.length }} selected
+          </span>
+        </div>
+
+        <p-table
+          [value]="fetchedDomains"
+          [paginator]="fetchedDomains.length > 10"
+          [rows]="10"
+          [showCurrentPageReport]="true"
+          currentPageReportTemplate="Showing {first} to {last} of {totalRecords} domains"
+          styleClass="p-datatable-sm"
+        >
+          <ng-template pTemplate="header">
+            <tr>
+              <th style="width: 50px">
+                <p-checkbox
+                  [ngModel]="selectedCount === fetchedDomains.length"
+                  [binary]="true"
+                  (onChange)="toggleSelectAll($event.checked)"
+                ></p-checkbox>
+              </th>
+              <th>Domain</th>
+              <th>Expiry Date</th>
+              <th>Days Left</th>
+              <th>Auto-Renew</th>
+              <th>Status</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-domain>
+            <tr>
+              <td>
+                <p-checkbox
+                  [(ngModel)]="domain.selected"
+                  [binary]="true"
+                ></p-checkbox>
+              </td>
+              <td>
+                <strong>{{ domain.domain_name }}</strong>
+              </td>
+              <td>{{ formatDate(domain.expiry_date) }}</td>
+              <td>
+                <span
+                  *ngIf="getDaysUntilExpiry(domain.expiry_date) !== null"
+                  [class]="getExpiryClass(getDaysUntilExpiry(domain.expiry_date))"
+                >
+                  {{ getDaysUntilExpiry(domain.expiry_date) }} days
+                </span>
+                <span *ngIf="getDaysUntilExpiry(domain.expiry_date) === null">N/A</span>
+              </td>
+              <td>
+                <i
+                  *ngIf="domain.auto_renew === true"
+                  class="pi pi-check-circle text-green-400"
+                  pTooltip="Auto-renew enabled"
+                ></i>
+                <i
+                  *ngIf="domain.auto_renew === false"
+                  class="pi pi-times-circle text-gray-400"
+                  pTooltip="Auto-renew disabled"
+                ></i>
+                <span *ngIf="domain.auto_renew === undefined">-</span>
+              </td>
+              <td>
+                <p-tag
+                  *ngIf="domain.status"
+                  [value]="domain.status"
+                  [severity]="domain.status === 'active' ? 'success' : 'info'"
+                ></p-tag>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr>
+              <td colspan="6" class="text-center py-4">
+                No domains found
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+
+        <div class="button-wrap mt-6">
+          <p-button
+            label="Previous"
+            icon="pi pi-arrow-left"
+            styleClass="p-button-secondary"
+            (onClick)="previousStep()"
+          ></p-button>
+          <p-button
+            label="Import Selected ({{ selectedCount }})"
+            icon="pi pi-download"
+            (onClick)="importSelectedDomains()"
+            [disabled]="selectedCount === 0 || isImporting"
+            [loading]="isImporting"
+          ></p-button>
+        </div>
+      </div>
+
+      <!-- Step 3: Importing -->
+      <div *ngSwitchCase="3" class="step-content text-center">
+        <div class="mb-6">
+          <i class="pi pi-spin pi-spinner text-6xl text-primary mb-4"></i>
+          <h3>Importing Domains...</h3>
+          <p *ngIf="importProgress">
+            {{ importProgress.currentDomain || 'Preparing...' }}
+          </p>
+        </div>
+
+        <div *ngIf="importProgress" class="mb-4">
+          <p-progressBar
+            [value]="importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0"
+            [showValue]="true"
+          ></p-progressBar>
+          <p class="mt-2 text-sm">
+            {{ importProgress.current }} of {{ importProgress.total }} domains processed
+          </p>
+        </div>
+      </div>
+
+      <!-- Step 4: Summary -->
+      <div *ngSwitchCase="4" class="step-content">
+        <div class="mb-6 text-center">
+          <i
+            class="pi text-6xl mb-4"
+            [ngClass]="{
+              'pi-check-circle text-green-400': importedDomains.length > 0 && failedDomains.length === 0,
+              'pi-exclamation-triangle text-yellow-400': failedDomains.length > 0 && importedDomains.length > 0,
+              'pi-times-circle text-red-400': importedDomains.length === 0 && failedDomains.length > 0
+            }"
+          ></i>
+          <h3>Import Complete</h3>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+          <div class="text-center p-4 bg-green-900/20 rounded border border-green-500/30">
+            <div class="text-3xl font-bold text-green-400">{{ importedDomains.length }}</div>
+            <div class="text-sm">Imported</div>
+          </div>
+          <div class="text-center p-4 bg-yellow-900/20 rounded border border-yellow-500/30">
+            <div class="text-3xl font-bold text-yellow-400">{{ skippedDomains.length }}</div>
+            <div class="text-sm">Skipped (already exist)</div>
+          </div>
+          <div class="text-center p-4 bg-red-900/20 rounded border border-red-500/30">
+            <div class="text-3xl font-bold text-red-400">{{ failedDomains.length }}</div>
+            <div class="text-sm">Failed</div>
+          </div>
+        </div>
+
+        <!-- Imported Domains -->
+        <div *ngIf="importedDomains.length > 0" class="mb-4">
+          <h4 class="flex items-center gap-2 mb-2">
+            <i class="pi pi-check-circle text-green-400"></i>
+            Successfully Imported
+          </h4>
+          <ul class="list-none p-0 max-h-40 overflow-y-auto">
+            <li *ngFor="let domain of importedDomains" class="py-1">
+              <a
+                [routerLink]="'/domains/' + domain"
+                class="text-default hover:text-primary"
+              >
+                {{ domain }}
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Skipped Domains -->
+        <div *ngIf="skippedDomains.length > 0" class="mb-4">
+          <h4 class="flex items-center gap-2 mb-2">
+            <i class="pi pi-minus-circle text-yellow-400"></i>
+            Skipped (Already Exist)
+          </h4>
+          <ul class="list-none p-0 max-h-40 overflow-y-auto">
+            <li *ngFor="let domain of skippedDomains" class="py-1 text-gray-400">
+              {{ domain }}
+            </li>
+          </ul>
+        </div>
+
+        <!-- Failed Domains -->
+        <div *ngIf="failedDomains.length > 0" class="mb-4">
+          <h4 class="flex items-center gap-2 mb-2">
+            <i class="pi pi-times-circle text-red-400"></i>
+            Failed to Import
+          </h4>
+          <ul class="list-none p-0 max-h-40 overflow-y-auto">
+            <li *ngFor="let item of failedDomains" class="py-1">
+              <span class="text-red-400">{{ item.domain }}</span>
+              <small class="text-gray-400 ml-2">{{ item.error }}</small>
+            </li>
+          </ul>
+        </div>
+
+        <div class="button-wrap mt-6">
+          <p-button
+            label="Import More"
+            icon="pi pi-refresh"
+            styleClass="p-button-secondary"
+            (onClick)="startOver()"
+          ></p-button>
+          <p-button
+            label="Go to Dashboard"
+            icon="pi pi-home"
+            (onClick)="goToHomePage()"
+          ></p-button>
+        </div>
+      </div>
+    </ng-container>
+  </p-card>
+</div>

@@ -131,6 +131,7 @@ export const settingsLinks = [
   { label: 'Account Settings', icon: 'pi pi-user-edit', routerLink: '/settings/account' },
   { label: 'Notification Preferences', icon: 'pi pi-bell', routerLink: '/settings/notification-preferences' },
   { label: 'Display Options', icon: 'pi pi-palette', routerLink: '/settings/display-options' },
+  { label: 'Registrar Accounts', icon: 'pi pi-server', routerLink: '/settings/registrar-accounts' },
   { label: 'Privacy and Data', icon: 'pi pi-eye-slash', routerLink: '/settings/privacy-settings' },
   { label: 'Manage Plan', icon: 'pi pi-shop', routerLink: '/settings/upgrade' },
   { label: 'Developer Options', icon: 'pi pi-code', routerLink: '/settings/developer-options' },
@@ -192,6 +193,11 @@ export const authenticatedNavLinks = [
             label: 'Bulk Import',
             icon: 'pi pi-fw pi-upload',
             routerLink: '/domains/add/bulk-add'
+          },
+          {
+            label: 'Import from Registrar',
+            icon: 'pi pi-fw pi-cloud-download',
+            routerLink: '/domains/add/registrar-import'
           },
           {
             label: 'Bulk Export',

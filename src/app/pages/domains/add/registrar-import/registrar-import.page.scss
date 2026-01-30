@@ -1,0 +1,91 @@
+.registrar-import-wrap {
+  max-width: 1000px;
+  margin: 0 auto;
+
+  h2 {
+    margin-bottom: 1.5rem;
+  }
+
+  .step-content {
+    min-height: 400px;
+    padding: 1.5rem 0;
+  }
+
+  .button-wrap {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--surface-border);
+  }
+
+  .manual-credentials {
+    padding: 1.5rem;
+    background: var(--surface-ground);
+    border-radius: 8px;
+    border: 1px solid var(--surface-border);
+  }
+
+  // Table styling
+  :host ::ng-deep {
+    .p-datatable {
+      .p-datatable-thead > tr > th {
+        background: var(--surface-ground);
+        font-weight: 600;
+      }
+
+      .p-datatable-tbody > tr {
+        &:hover {
+          background: var(--surface-hover);
+        }
+      }
+    }
+
+    .p-checkbox {
+      .p-checkbox-box {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    .p-dropdown {
+      width: 100%;
+    }
+
+    .p-password {
+      width: 100%;
+
+      input {
+        width: 100%;
+      }
+    }
+  }
+
+  // Summary grid
+  .grid {
+    display: grid;
+  }
+
+  .grid-cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .gap-4 {
+    gap: 1rem;
+  }
+
+  // Responsive
+  @media (max-width: 768px) {
+    .grid-cols-3 {
+      grid-template-columns: 1fr;
+    }
+
+    .button-wrap {
+      flex-direction: column;
+
+      p-button {
+        width: 100%;
+      }
+    }
+  }
+}

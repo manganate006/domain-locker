@@ -17,6 +17,7 @@ import { SslQueries } from '~/app/services/db-query-services/pg/db-ssl.service';
 import { WhoisQueries } from '~/app/services/db-query-services/pg/db-whois.service';
 import { StatusQueries } from '~/app/services/db-query-services/pg/db-statuses.service';
 import { SubdomainsQueries } from '~/app/services/db-query-services/pg/db-subdomains.service';
+import { RegistrarAccountsQueries } from '~/app/services/db-query-services/pg/db-registrar-accounts.service';
 import { PgApiUtilService } from '~/app/utils/pg-api.util';
 import { ErrorHandlerService } from '../error-handler.service';
 
@@ -43,7 +44,11 @@ export default class PgDatabaseService extends DatabaseService {
     this.whoisQueries = new WhoisQueries(this.pgApiUtil, this.handleError.bind(this));
     this.statusQueries = new StatusQueries(this.pgApiUtil, this.handleError.bind(this));
     this.subdomainsQueries = new SubdomainsQueries(this.pgApiUtil, this.handleError.bind(this));
+    this.registrarAccountsQueries = new RegistrarAccountsQueries(this.pgApiUtil, this.handleError.bind(this));
   }
+
+  // Registrar accounts queries
+  registrarAccountsQueries!: RegistrarAccountsQueries;
 
 
   private getCurrentUser(): Promise<{ id: string } | null> {
