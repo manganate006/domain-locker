@@ -100,8 +100,23 @@ coverage
 
 # dotenv environment variables file
 .env
+.env.*
 .env.test
 .env.production
+
+# Credentials and secrets
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+*-credentials.json
+*-secrets.json
+
+# Docker local overrides
+docker-compose.override.yml
+docker-compose.local.yml
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
