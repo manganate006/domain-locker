@@ -42,7 +42,7 @@
     </ng-template>
     <ng-template pTemplate>
       <div class="py-2 px-4 pb-4 w-full border-2 !border-l-0 border-surface-50 rounded-r overflow-y-visible">
-        @if ((settingsEnabled$ | async) && databaseServiceType === 'supabase') {
+        @if ((settingsEnabled$ | async) || databaseServiceType === 'pg') {
           <router-outlet></router-outlet>
         } @else {
           <app-feature-not-enabled feature="accountSettings" />
