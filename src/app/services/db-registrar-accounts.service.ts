@@ -16,6 +16,9 @@ import {
 } from './db-query-services/pg/db-registrar-accounts.service';
 import { ProviderName } from './registrar-providers';
 
+// Re-export types for consumers
+export { DbRegistrarAccount, SaveRegistrarAccountData };
+
 @Injectable({
   providedIn: 'root',
 })

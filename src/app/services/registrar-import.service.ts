@@ -155,7 +155,7 @@ export class RegistrarImportService {
       const saveData: SaveDomainData = {
         domain: {
           domain_name: domainInfo.domain_name,
-          expiry_date: domainInfo.expiry_date || undefined,
+          expiry_date: domainInfo.expiry_date || new Date(),
           registration_date: domainInfo.registration_date || undefined,
           updated_date: new Date(),
           notes: `Imported from ${registrarName}`,
@@ -168,7 +168,10 @@ export class RegistrarImportService {
         whois: undefined,
         dns: domainInfo.dns_servers
           ? {
-              nsRecords: domainInfo.dns_servers,
+              dnssec: '',
+              nameServers: domainInfo.dns_servers,
+              mxRecords: [],
+              txtRecords: [],
             }
           : undefined,
         registrar: {

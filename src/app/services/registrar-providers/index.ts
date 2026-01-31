@@ -37,26 +37,25 @@ export * from './provider.interface';
 /**
  * Registry de tous les providers disponibles
  */
-const providers: Map<ProviderName, RegistrarProvider> = new Map([
-  ['ovh', ovhProvider],
-  ['hostinger', hostingerProvider],
-  ['godaddy', godaddyProvider],
-  ['cloudflare', cloudflareProvider],
-  ['namecheap', namecheapProvider],
-  ['porkbun', porkbunProvider],
-  ['gandi', gandiProvider],
-  ['namesilo', namesiloProvider],
-  ['dynadot', dynadotProvider],
-  ['namecom', namecomProvider],
-  ['dreamhost', dreamhostProvider],
-  ['enom', enomProvider],
-  ['internetbs', internetbsProvider],
-  ['namebright', namebrightProvider],
-  ['opensrs', opensrsProvider],
-  ['resellerclub', resellerclubProvider],
-  ['dnsimple', dnsimpleProvider],
-  ['abovecom', abovecomProvider],
-]);
+const providers = new Map<ProviderName, RegistrarProvider>();
+providers.set('ovh', ovhProvider);
+providers.set('hostinger', hostingerProvider);
+providers.set('godaddy', godaddyProvider);
+providers.set('cloudflare', cloudflareProvider);
+providers.set('namecheap', namecheapProvider);
+providers.set('porkbun', porkbunProvider);
+providers.set('gandi', gandiProvider);
+providers.set('namesilo', namesiloProvider);
+providers.set('dynadot', dynadotProvider);
+providers.set('namecom', namecomProvider);
+providers.set('dreamhost', dreamhostProvider);
+providers.set('enom', enomProvider);
+providers.set('internetbs', internetbsProvider);
+providers.set('namebright', namebrightProvider);
+providers.set('opensrs', opensrsProvider);
+providers.set('resellerclub', resellerclubProvider);
+providers.set('dnsimple', dnsimpleProvider);
+providers.set('abovecom', abovecomProvider);
 
 /**
  * Récupère un provider par son nom

@@ -16,11 +16,11 @@ import { takeUntil } from 'rxjs/operators';
 import { PrimeNgModule } from '~/app/prime-ng.module';
 import { ConfirmationService } from 'primeng/api';
 import { TableModule } from 'primeng/table';
+import { ProgressBarModule } from 'primeng/progressbar';
 
 import {
   RegistrarImportService,
   ImportProgress,
-  RegistrarAccount,
 } from '~/app/services/registrar-import.service';
 import {
   DomainInfo,
@@ -28,7 +28,10 @@ import {
   ProviderCredentials,
   ProviderName,
 } from '~/app/services/registrar-providers';
-import { DbRegistrarAccountsService } from '~/app/services/db-registrar-accounts.service';
+import {
+  DbRegistrarAccountsService,
+  DbRegistrarAccount,
+} from '~/app/services/db-registrar-accounts.service';
 import { GlobalMessageService } from '~/app/services/messaging.service';
 import { ErrorHandlerService } from '~/app/services/error-handler.service';
 
@@ -39,7 +42,7 @@ interface SelectableDomain extends DomainInfo {
 @Component({
   standalone: true,
   selector: 'app-registrar-import',
-  imports: [CommonModule, PrimeNgModule, ReactiveFormsModule, TableModule],
+  imports: [CommonModule, PrimeNgModule, ReactiveFormsModule, TableModule, ProgressBarModule],
   providers: [ConfirmationService],
   templateUrl: './registrar-import.page.html',
   styleUrls: ['./registrar-import.page.scss'],
@@ -52,7 +55,7 @@ export default class RegistrarImportComponent implements OnInit, OnDestroy {
   availableProviders: ProviderConfig[] = [];
 
   /** Comptes registrar configurés */
-  registrarAccounts: RegistrarAccount[] = [];
+  registrarAccounts: DbRegistrarAccount[] = [];
 
   /** Formulaire de sélection */
   selectionForm: FormGroup;
@@ -75,7 +78,7 @@ export default class RegistrarImportComponent implements OnInit, OnDestroy {
 
   /** Provider sélectionné */
   selectedProvider: ProviderConfig | null = null;
-  selectedAccount: RegistrarAccount | null = null;
+  selectedAccount: DbRegistrarAccount | null = null;
 
   /** Credentials manuels (si pas de compte enregistré) */
   manualCredentialsForm: FormGroup;
@@ -123,10 +126,10 @@ export default class RegistrarImportComponent implements OnInit, OnDestroy {
    */
   private loadAccounts(): void {
     this.accountsService.getAccounts().pipe(takeUntil(this.destroy$)).subscribe({
-      next: (accounts) => {
+      next: (accounts: DbRegistrarAccount[]) => {
         this.registrarAccounts = accounts;
       },
-      error: (error) => {
+      error: (error: Error) => {
         this.errorHandler.handleError({
           error,
           message: 'Failed to load registrar accounts',
@@ -197,7 +200,7 @@ export default class RegistrarImportComponent implements OnInit, OnDestroy {
   /**
    * Récupère les comptes pour le provider sélectionné
    */
-  getAccountsForSelectedProvider(): RegistrarAccount[] {
+  getAccountsForSelectedProvider(): DbRegistrarAccount[] {
     if (!this.selectedProvider) return [];
     return this.registrarAccounts.filter(
       (a) => a.provider_name === this.selectedProvider?.name

@@ -9,8 +9,13 @@
  * Credentials pour l'authentification auprès d'un registrar
  */
 export interface ProviderCredentials {
-  [key: string]: string;
+  [key: string]: string | undefined;
 }
+
+/**
+ * Types d'endpoints OVH supportés
+ */
+export type OvhEndpoint = 'ovh-eu' | 'ovh-ca' | 'ovh-us' | 'kimsufi-eu' | 'kimsufi-ca' | 'soyoustart-eu' | 'soyoustart-ca';
 
 /**
  * Credentials spécifiques pour OVH (signature HMAC)
@@ -19,7 +24,7 @@ export interface OvhCredentials extends ProviderCredentials {
   applicationKey: string;
   applicationSecret: string;
   consumerKey: string;
-  endpoint?: 'ovh-eu' | 'ovh-ca' | 'ovh-us' | 'kimsufi-eu' | 'kimsufi-ca' | 'soyoustart-eu' | 'soyoustart-ca';
+  endpoint?: OvhEndpoint;
 }
 
 /**

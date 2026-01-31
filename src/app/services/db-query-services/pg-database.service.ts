@@ -48,7 +48,7 @@ export default class PgDatabaseService extends DatabaseService {
   }
 
   // Registrar accounts queries
-  registrarAccountsQueries!: RegistrarAccountsQueries;
+  override registrarAccountsQueries!: RegistrarAccountsQueries;
 
 
   private getCurrentUser(): Promise<{ id: string } | null> {

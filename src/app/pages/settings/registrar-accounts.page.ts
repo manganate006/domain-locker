@@ -75,11 +75,11 @@ export default class RegistrarAccountsPage implements OnInit {
   private loadAccounts(): void {
     this.loading.accounts = true;
     this.databaseService.instance.registrarAccountsQueries.getAccounts().subscribe({
-      next: (accounts) => {
+      next: (accounts: DbRegistrarAccount[]) => {
         this.accounts = accounts;
         this.loading.accounts = false;
       },
-      error: (error) => {
+      error: (error: Error) => {
         this.errorHandler.handleError({
           error,
           message: 'Failed to load registrar accounts',
@@ -194,13 +194,13 @@ export default class RegistrarAccountsPage implements OnInit {
         await this.databaseService.instance.registrarAccountsQueries
           .updateAccount(this.editingAccountId, data)
           .toPromise();
-        this.messageService.showSuccess('Account updated successfully');
+        this.messageService.showSuccess('Success', 'Account updated successfully');
       } else {
         // Create new
         await this.databaseService.instance.registrarAccountsQueries
           .createAccount(data)
           .toPromise();
-        this.messageService.showSuccess('Account created successfully');
+        this.messageService.showSuccess('Success', 'Account created successfully');
       }
 
       this.closeDialog();
@@ -233,7 +233,7 @@ export default class RegistrarAccountsPage implements OnInit {
       await this.databaseService.instance.registrarAccountsQueries
         .deleteAccount(accountId)
         .toPromise();
-      this.messageService.showSuccess('Account deleted successfully');
+      this.messageService.showSuccess('Success', 'Account deleted successfully');
       this.loadAccounts();
     } catch (error: any) {
       this.errorHandler.handleError({
