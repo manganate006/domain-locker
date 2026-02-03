@@ -90,14 +90,22 @@ docker compose up -d
 
 ### Fichiers modifiés
 
-- `src/app/pages/settings/index.page.html` - Fix pour autoriser les pages settings en mode PostgreSQL
+- `db/schema.sql` — Tables `registrar_accounts` et `autofetch_settings` ajoutées, colonne `auto_sync`
+- `docker-compose.yml` — Service `updater` (cron), variable `DL_AUTOFETCH_KEY`
+- `src/app/constants/feature-options.ts` — Domain Monitor activé en mode self-hosted
+- `src/app/pages/settings/index.page.html` — Fix pour autoriser les pages settings en mode PostgreSQL
+- `src/app/pages/settings/registrar-accounts.page.ts` — Toggle auto_sync + gestion clé API autofetch
+- `src/app/pages/settings/registrar-accounts.page.html` — UI autofetch (toggle, clé API, commande cron)
+- `src/app/services/db-query-services/pg/db-registrar-accounts.service.ts` — Support auto_sync + gestion clé API
+- `src/app/services/registrar-providers/*.provider.ts` — 18 providers migrés vers le proxy backend
 
 ### Fichiers ajoutés
 
-- `src/app/services/registrar-providers/` - Providers pour 18 registrars (OVH, Hostinger, GoDaddy, Cloudflare, etc.)
-- `src/app/pages/domains/add/registrar-import/` - Page d'import depuis registrar
-- `src/app/pages/settings/registrar-accounts.page.ts` - Page de configuration des comptes registrar
-- `db/schema.sql` - Table `registrar_accounts` ajoutée
+- `src/server/routes/registrar-proxy.ts` — Route proxy backend pour les appels API registrars (contourne CORS)
+- `src/server/routes/registrar-autofetch.ts` — Endpoint autofetch pour synchronisation automatique via cron
+- `src/app/services/registrar-providers/` — Providers pour 18 registrars (OVH, Hostinger, GoDaddy, Cloudflare, etc.)
+- `src/app/pages/domains/add/registrar-import/` — Page d'import depuis registrar
+- `src/app/pages/settings/registrar-accounts.page.ts` — Page de configuration des comptes registrar
 
 ## Notes importantes
 

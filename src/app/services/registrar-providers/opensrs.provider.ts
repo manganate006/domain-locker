@@ -17,7 +17,10 @@ export interface OpenSrsCredentials extends ProviderCredentials {
   apiKey: string;
 }
 
-const OPENSRS_API_URL = 'https://rr-n1-tor.opensrs.net:55443';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class OpenSrsProvider implements RegistrarProvider {
   readonly name = 'opensrs';
@@ -76,22 +79,35 @@ export class OpenSrsProvider implements RegistrarProvider {
   }
 
   private async request(credentials: OpenSrsCredentials, action: string, object: string, attributes: Record<string, any> = {}): Promise<any> {
-    const xml = this.buildXmlRequest(action, object, attributes);
-    const signature = this.generateSignature(xml, credentials.apiKey);
-
-    const response = await fetch(OPENSRS_API_URL, {
+    const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'text/xml',
-        'X-Username': credentials.username,
-        'X-Signature': signature,
+        'Content-Type': 'application/json',
       },
-      body: xml,
+      body: JSON.stringify({
+        provider: 'opensrs',
+        credentials: {
+          username: credentials.username,
+          apiKey: credentials.apiKey,
+        },
+        action,
+        object,
+        attributes,
+      }),
     });
 
-    if (!response.ok) throw new Error(`OpenSRS API error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenSRS API error (${response.status}): ${errorText}`);
+    }
 
-    const text = await response.text();
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`OpenSRS API error: ${result.error}`);
+    }
+
+    const text = result.data;
     // Simple XML parsing for OpenSRS response
     const isSuccess = text.includes('<item key="is_success">1</item>');
     if (!isSuccess && !text.includes('attributes')) {

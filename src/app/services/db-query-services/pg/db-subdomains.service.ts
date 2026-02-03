@@ -33,13 +33,14 @@ export class SubdomainsQueries {
   }
 
   async saveSubdomains(domainId: string, subdomains: { name: string; sd_info?: string }[]): Promise<void> {
+    // Si pas de sous-domaines, retourner silencieusement (pas d'erreur)
     if (!subdomains || subdomains.length === 0) {
-      throw new Error('Skipping subdomains, none found');
+      return;
     }
 
     const validSubdomains = subdomains.filter(sd => sd.name?.trim());
     if (validSubdomains.length === 0) {
-      throw new Error('Skipping subdomains, no valid subdomains listed');
+      return; // Pas de sous-domaines valides, retourner silencieusement
     }
 
     const query = `SELECT name FROM sub_domains WHERE domain_id = $1`;
@@ -51,7 +52,7 @@ export class SubdomainsQueries {
     const subdomainsToInsert = validSubdomains.filter(sd => !existingNames.includes(sd.name));
 
     if (subdomainsToInsert.length === 0) {
-      throw new Error('Skipping subdomains, all already exist');
+      return; // Tous les sous-domaines existent déjà, retourner silencieusement
     }
 
     const insertQuery = `

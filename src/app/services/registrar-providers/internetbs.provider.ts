@@ -16,7 +16,10 @@ export interface InternetBsCredentials extends ProviderCredentials {
   password: string;
 }
 
-const INTERNETBS_API_URL = 'https://api.internet.bs';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class InternetBsProvider implements RegistrarProvider {
   readonly name = 'internetbs';
@@ -45,17 +48,34 @@ export class InternetBsProvider implements RegistrarProvider {
   };
 
   private async request(credentials: InternetBsCredentials, endpoint: string, params: Record<string, string> = {}): Promise<any> {
-    const queryParams = new URLSearchParams({
-      ApiKey: credentials.apiKey,
-      Password: credentials.password,
-      ResponseFormat: 'JSON',
-      ...params,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'internetbs',
+        credentials: {
+          apiKey: credentials.apiKey,
+          password: credentials.password,
+        },
+        path: endpoint,
+        params,
+      }),
     });
 
-    const response = await fetch(`${INTERNETBS_API_URL}${endpoint}?${queryParams.toString()}`);
-    if (!response.ok) throw new Error(`Internet.bs API error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Internet.bs API error (${response.status}): ${errorText}`);
+    }
 
-    const data = await response.json();
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`Internet.bs API error: ${result.error}`);
+    }
+
+    const data = result.data;
     if (data.status === 'FAILURE') {
       throw new Error(`Internet.bs API error: ${data.message || 'Unknown'}`);
     }

@@ -491,12 +491,26 @@ CREATE TABLE IF NOT EXISTS "public"."registrar_accounts" (
     provider_name text NOT NULL,
     label text,
     credentials jsonb NOT NULL,
+    auto_sync boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     last_sync_at timestamp with time zone,
     CONSTRAINT registrar_accounts_pkey PRIMARY KEY (id),
     CONSTRAINT registrar_accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES "public"."users" (id) ON DELETE CASCADE
 );
+
+-- Table pour stocker la clé API d'autofetch (une seule clé globale)
+CREATE TABLE IF NOT EXISTS "public"."autofetch_settings" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    api_key text NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT autofetch_settings_pkey PRIMARY KEY (id)
+);
+
+-- Insérer une clé API par défaut (à régénérer par l'utilisateur)
+INSERT INTO "public"."autofetch_settings" (api_key)
+SELECT encode(gen_random_bytes(32), 'hex')
+WHERE NOT EXISTS (SELECT 1 FROM "public"."autofetch_settings");
 
 -- Index for user_id in registrar_accounts
 CREATE INDEX IF NOT EXISTS idx_registrar_accounts_user_id ON "public"."registrar_accounts" (user_id);

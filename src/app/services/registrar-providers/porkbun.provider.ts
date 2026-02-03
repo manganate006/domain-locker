@@ -24,9 +24,9 @@ export interface PorkbunCredentials extends ProviderCredentials {
 }
 
 /**
- * Base URL de l'API Porkbun
+ * URL du proxy backend pour contourner CORS
  */
-const PORKBUN_API_URL = 'https://api.porkbun.com/api/json/v3';
+const PROXY_URL = '/api/registrar-proxy';
 
 /**
  * Réponse domaine Porkbun
@@ -85,24 +85,27 @@ export class PorkbunProvider implements RegistrarProvider {
   };
 
   /**
-   * Effectue une requête authentifiée vers l'API Porkbun
+   * Effectue une requête authentifiée vers l'API Porkbun via le proxy backend
    */
   private async request<T>(
     credentials: PorkbunCredentials,
     endpoint: string,
     body: Record<string, any> = {}
   ): Promise<PorkbunResponse<T>> {
-    const url = `${PORKBUN_API_URL}${endpoint}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        apikey: credentials.apiKey,
-        secretapikey: credentials.secretKey,
-        ...body,
+        provider: 'porkbun',
+        credentials: {
+          apiKey: credentials.apiKey,
+          secretKey: credentials.secretKey,
+        },
+        method: 'POST',
+        path: endpoint,
+        body: JSON.stringify(body),
       }),
     });
 
@@ -111,7 +114,13 @@ export class PorkbunProvider implements RegistrarProvider {
       throw new Error(`Porkbun API error (${response.status}): ${errorText}`);
     }
 
-    const data = await response.json();
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`Porkbun API error: ${result.error}`);
+    }
+
+    const data = result.data;
 
     if (data.status !== 'SUCCESS') {
       throw new Error(`Porkbun API error: ${data.message || 'Unknown error'}`);

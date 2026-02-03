@@ -3,6 +3,7 @@
  *
  * Implémentation du provider pour l'API Cloudflare.
  * Utilise l'authentification par Email + API Key.
+ * Les requêtes passent par le proxy backend pour contourner CORS.
  *
  * Documentation API Cloudflare :
  * https://developers.cloudflare.com/api/
@@ -25,9 +26,9 @@ export interface CloudflareCredentials extends ProviderCredentials {
 }
 
 /**
- * Base URL de l'API Cloudflare
+ * URL du proxy backend pour contourner CORS
  */
-const CLOUDFLARE_API_URL = 'https://api.cloudflare.com/client/v4';
+const PROXY_URL = '/api/registrar-proxy';
 
 /**
  * Réponse zone Cloudflare
@@ -109,24 +110,27 @@ export class CloudflareProvider implements RegistrarProvider {
   };
 
   /**
-   * Effectue une requête authentifiée vers l'API Cloudflare
+   * Effectue une requête authentifiée vers l'API Cloudflare via le proxy backend
    */
   private async request<T>(
     credentials: CloudflareCredentials,
     method: string,
     path: string
   ): Promise<CloudflareResponse<T>> {
-    const url = `${CLOUDFLARE_API_URL}${path}`;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Auth-Email': credentials.email,
-      'X-Auth-Key': credentials.apiKey,
-    };
-
-    const response = await fetch(url, {
-      method,
-      headers,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'cloudflare',
+        credentials: {
+          email: credentials.email,
+          apiKey: credentials.apiKey,
+        },
+        method,
+        path,
+      }),
     });
 
     if (!response.ok) {
@@ -134,7 +138,13 @@ export class CloudflareProvider implements RegistrarProvider {
       throw new Error(`Cloudflare API error (${response.status}): ${errorText}`);
     }
 
-    const data = await response.json();
+    const result = await response.json();
+
+    if (result.statusCode && result.statusCode >= 400) {
+      throw new Error(`Cloudflare API error (${result.statusCode}): ${JSON.stringify(result.body)}`);
+    }
+
+    const data = result.data as CloudflareResponse<T>;
     if (!data.success) {
       throw new Error(`Cloudflare API error: ${JSON.stringify(data.errors)}`);
     }

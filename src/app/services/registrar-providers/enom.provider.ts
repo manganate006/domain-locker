@@ -16,7 +16,10 @@ export interface EnomCredentials extends ProviderCredentials {
   pw: string;
 }
 
-const ENOM_API_URL = 'https://reseller.enom.com/interface.asp';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class EnomProvider implements RegistrarProvider {
   readonly name = 'enom';
@@ -61,25 +64,43 @@ export class EnomProvider implements RegistrarProvider {
   }
 
   private async request(credentials: EnomCredentials, command: string, params: Record<string, string> = {}): Promise<any> {
-    const queryParams = new URLSearchParams({
-      uid: credentials.uid,
-      pw: credentials.pw,
-      command,
-      responsetype: 'xml',
-      ...params,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'enom',
+        credentials: {
+          uid: credentials.uid,
+          pw: credentials.pw,
+        },
+        command,
+        params,
+      }),
     });
 
-    const response = await fetch(`${ENOM_API_URL}?${queryParams.toString()}`);
-    if (!response.ok) throw new Error(`eNom API error: ${response.status}`);
-
-    const xmlText = await response.text();
-    const data = this.parseXml(xmlText);
-
-    if (data.ErrCount && parseInt(data.ErrCount, 10) > 0) {
-      throw new Error(`eNom API error: ${data.Err1 || 'Unknown'}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`eNom API error (${response.status}): ${errorText}`);
     }
 
-    return data;
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`eNom API error: ${result.error}`);
+    }
+
+    // Le proxy retourne du XML brut, on le parse ici
+    if (typeof result.data === 'string') {
+      const data = this.parseXml(result.data);
+      if (data.ErrCount && parseInt(data.ErrCount, 10) > 0) {
+        throw new Error(`eNom API error: ${data.Err1 || 'Unknown'}`);
+      }
+      return data;
+    }
+
+    return result.data;
   }
 
   async validateCredentials(credentials: ProviderCredentials): Promise<boolean> {

@@ -15,7 +15,10 @@ export interface AboveComCredentials extends ProviderCredentials {
   apiKey: string;
 }
 
-const ABOVECOM_API_URL = 'https://www.above.com/api';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class AboveComProvider implements RegistrarProvider {
   readonly name = 'abovecom';
@@ -38,15 +41,33 @@ export class AboveComProvider implements RegistrarProvider {
   };
 
   private async request(credentials: AboveComCredentials, endpoint: string, params: Record<string, string> = {}): Promise<any> {
-    const queryParams = new URLSearchParams({
-      key: credentials.apiKey,
-      ...params,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'abovecom',
+        credentials: {
+          apiKey: credentials.apiKey,
+        },
+        path: endpoint,
+        params,
+      }),
     });
 
-    const response = await fetch(`${ABOVECOM_API_URL}${endpoint}?${queryParams.toString()}`);
-    if (!response.ok) throw new Error(`Above.com API error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Above.com API error (${response.status}): ${errorText}`);
+    }
 
-    const data = await response.json();
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`Above.com API error: ${result.error}`);
+    }
+
+    const data = result.data;
     if (data.error) {
       throw new Error(`Above.com API error: ${data.error}`);
     }

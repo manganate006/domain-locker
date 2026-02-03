@@ -3,6 +3,7 @@
  *
  * Implémentation du provider pour l'API Gandi.
  * Utilise l'authentification par API Key.
+ * Les requêtes passent par le proxy backend pour contourner CORS.
  *
  * Documentation API Gandi :
  * https://api.gandi.net/docs/
@@ -23,9 +24,9 @@ export interface GandiCredentials extends ProviderCredentials {
 }
 
 /**
- * Base URL de l'API Gandi
+ * URL du proxy backend pour contourner CORS
  */
-const GANDI_API_URL = 'https://api.gandi.net/v5';
+const PROXY_URL = '/api/registrar-proxy';
 
 /**
  * Réponse domaine Gandi
@@ -71,23 +72,26 @@ export class GandiProvider implements RegistrarProvider {
   };
 
   /**
-   * Effectue une requête authentifiée vers l'API Gandi
+   * Effectue une requête authentifiée vers l'API Gandi via le proxy backend
    */
   private async request<T>(
     credentials: GandiCredentials,
     method: string,
     path: string
   ): Promise<T> {
-    const url = `${GANDI_API_URL}${path}`;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Apikey ${credentials.apiKey}`,
-    };
-
-    const response = await fetch(url, {
-      method,
-      headers,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'gandi',
+        credentials: {
+          apiKey: credentials.apiKey,
+        },
+        method,
+        path,
+      }),
     });
 
     if (!response.ok) {
@@ -95,7 +99,13 @@ export class GandiProvider implements RegistrarProvider {
       throw new Error(`Gandi API error (${response.status}): ${errorText}`);
     }
 
-    return response.json();
+    const result = await response.json();
+
+    if (result.statusCode && result.statusCode >= 400) {
+      throw new Error(`Gandi API error (${result.statusCode}): ${JSON.stringify(result.body)}`);
+    }
+
+    return result.data as T;
   }
 
   /**

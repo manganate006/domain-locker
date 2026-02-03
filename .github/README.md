@@ -1,3 +1,7 @@
+<blockquote>
+<p><strong>Fork de <a href="https://github.com/Lissy93/domain-locker">Lissy93/domain-locker</a></strong> — ajout de l'import automatique de domaines depuis les APIs de 18 registrars (OVH, Hostinger, GoDaddy, Cloudflare, etc.) avec synchronisation automatique via cron.</p>
+</blockquote>
+
 <h1 align="center">Domain Locker</h1>
 <p align="center">
 	<i>The Central Hub for all your Domain Names</i>
@@ -10,14 +14,18 @@
 
 <details>
   <summary><b>Contents</b></summary>
-  
+
   - [About](#about)
 	- [Screenshot](#screenshot)
 	- [Features](#features)
 	- [Live Demo](#demo)
+- [**Fork: Registrar Import**](#fork-registrar-import)
+	- [Supported Registrars](#supported-registrars)
+	- [Autofetch (Cron)](#autofetch-cron)
 - [Get Started](#get-started)
 	- [Domain-Locker.com](#option-1-domain-lockercom)
 	- [Self-Hosting](#option-2-self-hosting)
+	- [Self-Hosting (Fork)](#self-hosting-fork)
 - [Developing](#developing)
   - [App Setup](#project-setup)
   - [Architecture](#architecture)
@@ -106,6 +114,86 @@ kanban
 
 Try the live demo to [demo.domain-locker.com](https://demo.domain-locker.com) <br>
 (Username: `demo@domain-locker.com` Password: `domainlocker`)
+
+---
+
+## Fork: Registrar Import
+
+This fork adds **automatic domain import from registrar APIs**. Instead of manually adding domains one by one, you can connect your registrar accounts and import all your domains in a few clicks.
+
+All API calls go through a **backend proxy** (`/api/registrar-proxy`) to avoid CORS issues — the browser never calls external APIs directly.
+
+### Supported Registrars
+
+| Registrar | Auth Type |
+|-----------|-----------|
+| **OVH** | Application Key + Secret + Consumer Key (HMAC signature) |
+| **Hostinger** | Bearer Token (API Key) |
+| **GoDaddy** | API Key + Secret |
+| **Cloudflare** | API Token or Global API Key + Email |
+| **Gandi** | Personal Access Token |
+| **Namecheap** | API Key + Username + Whitelisted IP |
+| **NameSilo** | API Key |
+| **Dynadot** | API Key |
+| **Name.com** | Username + API Token |
+| **DreamHost** | API Key |
+| **eNom** | Username + API Key |
+| **Internet.bs** | API Key + Password |
+| **NameBright** | API Key |
+| **OpenSRS** | Username + API Key + IP |
+| **ResellerClub** | Reseller ID + API Key |
+| **DNSimple** | Account ID + Access Token |
+| **Above.com** | API Key |
+| **Porkbun** | API Key + Secret Key |
+
+### Pages added
+
+- **`/domains/add/registrar-import`** — Select a registrar, enter credentials (or use a saved account), fetch domain list, and import selected domains.
+- **`/settings/registrar-accounts`** — Save registrar credentials for reuse, toggle auto-sync per account, manage the autofetch API key.
+
+### Autofetch (Cron)
+
+The autofetch feature enables **daily automatic synchronization** of domains from your registrar accounts.
+
+**How it works:**
+1. In `/settings/registrar-accounts`, enable **Auto-sync** on the accounts you want
+2. Copy the generated **API key** from the same page
+3. Set `DL_AUTOFETCH_KEY` in your `.env` file (or pass it to Docker)
+4. The included `updater` container calls `/api/registrar-autofetch` daily at 5:00 AM
+5. New domains are imported automatically (existing ones are skipped)
+
+**Manual trigger:**
+```bash
+curl -s -X POST "http://localhost:3000/api/registrar-autofetch?key=YOUR_API_KEY"
+```
+
+### Self-Hosting (Fork)
+
+This fork uses a custom `docker-compose.yml` with an additional `updater` service for cron jobs (domain updates, expiration reminders, and registrar autofetch).
+
+```bash
+git clone -b feature/registrar-import https://github.com/manganate006/domain-locker.git
+cd domain-locker
+cp .env.example .env  # Edit with your settings
+docker compose up -d
+```
+
+**Fork-specific environment variables:**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DL_AUTOFETCH_KEY` | API key for automatic registrar sync (from Settings) | _(empty = disabled)_ |
+| `DL_ENCRYPTION_KEY` | Encryption key for stored registrar credentials | _(optional)_ |
+
+**Additional cron endpoints** (handled by the `updater` container):
+
+| Endpoint | Schedule | Description |
+|----------|----------|-------------|
+| `/api/domain-updater` | Daily 3:00 AM | Keep domain data up-to-date |
+| `/api/expiration-reminders` | Daily 4:00 AM | Send expiration notifications |
+| `/api/registrar-autofetch` | Daily 5:00 AM | Sync domains from registrars |
+
+For upstream sync instructions, see [SYNC.md](../SYNC.md).
 
 ---
 

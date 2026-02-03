@@ -3,6 +3,7 @@
  *
  * Implémentation du provider pour l'API GoDaddy.
  * Utilise l'authentification SSO-Key (API Key + Secret).
+ * Les requêtes passent par le proxy backend pour contourner CORS.
  *
  * Documentation API GoDaddy :
  * https://developer.godaddy.com/doc
@@ -21,12 +22,13 @@ import {
 export interface GoDaddyCredentials extends ProviderCredentials {
   apiKey: string;
   apiSecret: string;
+  environment?: string;
 }
 
 /**
- * Base URL de l'API GoDaddy
+ * URL du proxy backend pour contourner CORS
  */
-const GODADDY_API_URL = 'https://api.godaddy.com/v1';
+const PROXY_URL = '/api/registrar-proxy';
 
 /**
  * Réponse de l'API GoDaddy pour un domaine
@@ -78,24 +80,28 @@ export class GoDaddyProvider implements RegistrarProvider {
   };
 
   /**
-   * Effectue une requête authentifiée vers l'API GoDaddy
+   * Effectue une requête authentifiée vers l'API GoDaddy via le proxy backend
    */
   private async request<T>(
     credentials: GoDaddyCredentials,
     method: string,
     path: string
   ): Promise<T> {
-    const url = `${GODADDY_API_URL}${path}`;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `sso-key ${credentials.apiKey}:${credentials.apiSecret}`,
-    };
-
-    const response = await fetch(url, {
-      method,
-      headers,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'godaddy',
+        credentials: {
+          apiKey: credentials.apiKey,
+          apiSecret: credentials.apiSecret,
+          environment: credentials.environment || 'production',
+        },
+        method,
+        path,
+      }),
     });
 
     if (!response.ok) {
@@ -103,7 +109,13 @@ export class GoDaddyProvider implements RegistrarProvider {
       throw new Error(`GoDaddy API error (${response.status}): ${errorText}`);
     }
 
-    return response.json();
+    const result = await response.json();
+
+    if (result.statusCode && result.statusCode >= 400) {
+      throw new Error(`GoDaddy API error (${result.statusCode}): ${JSON.stringify(result.body)}`);
+    }
+
+    return result.data as T;
   }
 
   /**

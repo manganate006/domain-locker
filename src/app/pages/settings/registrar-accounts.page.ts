@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { PrimeNgModule } from '~/app/prime-ng.module';
 import DatabaseService from '~/app/services/database.service';
@@ -23,7 +23,7 @@ import { ErrorHandlerService } from '~/app/services/error-handler.service';
   selector: 'app-registrar-accounts',
   templateUrl: './registrar-accounts.page.html',
   styleUrls: ['./index.page.scss'],
-  imports: [CommonModule, PrimeNgModule, ReactiveFormsModule],
+  imports: [CommonModule, PrimeNgModule, ReactiveFormsModule, FormsModule],
   providers: [MessageService, ConfirmationService],
 })
 export default class RegistrarAccountsPage implements OnInit {
@@ -37,12 +37,19 @@ export default class RegistrarAccountsPage implements OnInit {
   accountForm!: FormGroup;
   selectedProvider: ProviderConfig | null = null;
 
+  // Autofetch settings
+  autofetchApiKey: string | null = null;
+  showApiKey = false;
+  autoSyncCount = 0;
+
   // UI state
   loading = {
     accounts: false,
     save: false,
     test: false,
     delete: false,
+    apiKey: false,
+    toggleSync: false,
   };
 
   showAddDialog = false;
@@ -61,6 +68,7 @@ export default class RegistrarAccountsPage implements OnInit {
   ngOnInit(): void {
     this.providers = getAllProviderConfigs();
     this.loadAccounts();
+    this.loadAutofetchSettings();
     this.initForm();
   }
 
@@ -77,6 +85,7 @@ export default class RegistrarAccountsPage implements OnInit {
     this.databaseService.instance.registrarAccountsQueries.getAccounts().subscribe({
       next: (accounts: DbRegistrarAccount[]) => {
         this.accounts = accounts;
+        this.autoSyncCount = accounts.filter((a) => a.auto_sync).length;
         this.loading.accounts = false;
       },
       error: (error: Error) => {
@@ -87,6 +96,20 @@ export default class RegistrarAccountsPage implements OnInit {
           showToast: true,
         });
         this.loading.accounts = false;
+      },
+    });
+  }
+
+  private loadAutofetchSettings(): void {
+    this.loading.apiKey = true;
+    this.databaseService.instance.registrarAccountsQueries.getAutofetchApiKey().subscribe({
+      next: (apiKey: string | null) => {
+        this.autofetchApiKey = apiKey;
+        this.loading.apiKey = false;
+      },
+      error: (error: Error) => {
+        console.error('Failed to load autofetch API key:', error);
+        this.loading.apiKey = false;
       },
     });
   }
@@ -273,5 +296,97 @@ export default class RegistrarAccountsPage implements OnInit {
       hour: '2-digit',
       minute: '2-digit',
     });
+  }
+
+  /**
+   * Toggle auto_sync for an account
+   */
+  toggleAutoSync(account: DbRegistrarAccount): void {
+    this.loading.toggleSync = true;
+    const newValue = !account.auto_sync;
+
+    this.databaseService.instance.registrarAccountsQueries
+      .toggleAutoSync(account.id, newValue)
+      .subscribe({
+        next: () => {
+          account.auto_sync = newValue;
+          this.autoSyncCount = this.accounts.filter((a) => a.auto_sync).length;
+          this.messageService.showSuccess(
+            'Success',
+            `Auto-sync ${newValue ? 'enabled' : 'disabled'} for ${account.provider_name}`
+          );
+          this.loading.toggleSync = false;
+        },
+        error: (error: Error) => {
+          this.errorHandler.handleError({
+            error,
+            message: 'Failed to toggle auto-sync',
+            location: 'registrar-accounts.page',
+            showToast: true,
+          });
+          this.loading.toggleSync = false;
+        },
+      });
+  }
+
+  /**
+   * Regenerate the autofetch API key
+   */
+  regenerateApiKey(): void {
+    this.confirmationService.confirm({
+      message: 'Are you sure you want to regenerate the API key? The old key will stop working immediately.',
+      header: 'Regenerate API Key',
+      icon: 'pi pi-exclamation-triangle',
+      accept: () => {
+        this.loading.apiKey = true;
+        this.databaseService.instance.registrarAccountsQueries
+          .regenerateAutofetchApiKey()
+          .subscribe({
+            next: (newKey: string) => {
+              this.autofetchApiKey = newKey;
+              this.showApiKey = true;
+              this.messageService.showSuccess('Success', 'API key regenerated successfully');
+              this.loading.apiKey = false;
+            },
+            error: (error: Error) => {
+              this.errorHandler.handleError({
+                error,
+                message: 'Failed to regenerate API key',
+                location: 'registrar-accounts.page',
+                showToast: true,
+              });
+              this.loading.apiKey = false;
+            },
+          });
+      },
+    });
+  }
+
+  /**
+   * Copy the cron command to clipboard
+   */
+  copyCronCommand(): void {
+    if (!this.autofetchApiKey) return;
+
+    const baseUrl = window.location.origin;
+    const cronCommand = `0 5 * * * curl -s -X POST "${baseUrl}/api/registrar-autofetch?key=${this.autofetchApiKey}"`;
+
+    navigator.clipboard.writeText(cronCommand).then(
+      () => {
+        this.messageService.showSuccess('Copied', 'Cron command copied to clipboard');
+      },
+      () => {
+        this.messageService.showError('Error', 'Failed to copy to clipboard');
+      }
+    );
+  }
+
+  /**
+   * Get masked API key for display
+   */
+  getMaskedApiKey(): string {
+    if (!this.autofetchApiKey) return '••••••••••••••••';
+    if (this.showApiKey) return this.autofetchApiKey;
+    return this.autofetchApiKey.substring(0, 8) + '••••••••••••••••';
   }
 }

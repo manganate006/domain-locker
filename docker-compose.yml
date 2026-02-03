@@ -66,11 +66,18 @@ services:
       - app
     networks:
       - domain_locker_network
+    environment:
+      # Clé API pour l'autofetch des domaines depuis les registrars
+      # Récupérez cette clé depuis Settings > Registrar Accounts dans l'interface
+      DL_AUTOFETCH_KEY: ${DL_AUTOFETCH_KEY:-}
     command: >
       /bin/sh -c "
         apk add --no-cache curl &&
         echo '0 3 * * * /usr/bin/curl -s -X POST http://app:3000/api/domain-updater' > /etc/crontabs/root &&
         echo '0 4 * * * /usr/bin/curl -s -X POST http://app:3000/api/expiration-reminders' >> /etc/crontabs/root &&
+        if [ -n \"$$DL_AUTOFETCH_KEY\" ]; then
+          echo '0 5 * * * /usr/bin/curl -s -X POST http://app:3000/api/registrar-autofetch?key='$$DL_AUTOFETCH_KEY >> /etc/crontabs/root
+        fi &&
         crond -f -L /dev/stdout
       "
 

@@ -23,9 +23,9 @@ export interface NameSiloCredentials extends ProviderCredentials {
 }
 
 /**
- * Base URL de l'API NameSilo
+ * URL du proxy backend pour contourner CORS
  */
-const NAMESILO_API_URL = 'https://www.namesilo.com/api';
+const PROXY_URL = '/api/registrar-proxy';
 
 /**
  * Provider NameSilo pour l'import de domaines
@@ -82,32 +82,45 @@ export class NameSiloProvider implements RegistrarProvider {
   }
 
   /**
-   * Effectue une requête vers l'API NameSilo
+   * Effectue une requête vers l'API NameSilo via le proxy backend
    */
   private async request(credentials: NameSiloCredentials, operation: string, params: Record<string, string> = {}): Promise<any> {
-    const queryParams = new URLSearchParams({
-      version: '1',
-      type: 'xml',
-      key: credentials.apiKey,
-      ...params,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'namesilo',
+        credentials: {
+          apiKey: credentials.apiKey,
+        },
+        operation,
+        params,
+      }),
     });
 
-    const url = `${NAMESILO_API_URL}/${operation}?${queryParams.toString()}`;
-
-    const response = await fetch(url);
-
     if (!response.ok) {
-      throw new Error(`NameSilo API error (${response.status})`);
+      const errorText = await response.text();
+      throw new Error(`NameSilo API error (${response.status}): ${errorText}`);
     }
 
-    const xmlText = await response.text();
-    const result = this.parseXml(xmlText);
+    const result = await response.json();
 
-    if (result.reply?.detail !== 'success') {
-      throw new Error(`NameSilo API error: ${result.reply?.detail || 'Unknown error'}`);
+    if (result.error) {
+      throw new Error(`NameSilo API error: ${result.error}`);
     }
 
-    return result;
+    // Le proxy retourne du XML parsé ou brut, on le parse ici si nécessaire
+    if (typeof result.data === 'string') {
+      const parsed = this.parseXml(result.data);
+      if (parsed.reply?.detail !== 'success') {
+        throw new Error(`NameSilo API error: ${parsed.reply?.detail || 'Unknown error'}`);
+      }
+      return parsed;
+    }
+
+    return result.data;
   }
 
   /**

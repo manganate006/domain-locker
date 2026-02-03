@@ -15,7 +15,10 @@ export interface DynadotCredentials extends ProviderCredentials {
   apiKey: string;
 }
 
-const DYNADOT_API_URL = 'https://api.dynadot.com/api3.json';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class DynadotProvider implements RegistrarProvider {
   readonly name = 'dynadot';
@@ -38,16 +41,33 @@ export class DynadotProvider implements RegistrarProvider {
   };
 
   private async request(credentials: DynadotCredentials, command: string, params: Record<string, string> = {}): Promise<any> {
-    const queryParams = new URLSearchParams({
-      key: credentials.apiKey,
-      command,
-      ...params,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'dynadot',
+        credentials: {
+          apiKey: credentials.apiKey,
+        },
+        command,
+        params,
+      }),
     });
 
-    const response = await fetch(`${DYNADOT_API_URL}?${queryParams.toString()}`);
-    if (!response.ok) throw new Error(`Dynadot API error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Dynadot API error (${response.status}): ${errorText}`);
+    }
 
-    const data = await response.json();
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`Dynadot API error: ${result.error}`);
+    }
+
+    const data = result.data;
     if (data.Status !== 'success' && data.status !== 'success') {
       throw new Error(`Dynadot API error: ${data.Error || data.error || 'Unknown'}`);
     }

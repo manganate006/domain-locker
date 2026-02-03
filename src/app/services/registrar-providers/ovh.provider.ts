@@ -2,7 +2,7 @@
  * OVH Registrar Provider
  *
  * Implémentation du provider pour l'API OVH.
- * Utilise l'authentification HMAC avec Application Key, Application Secret et Consumer Key.
+ * Utilise un proxy backend pour contourner les restrictions CORS.
  *
  * Documentation API OVH :
  * - Console : https://eu.api.ovh.com/console/?branch=v1&section=/domain
@@ -13,7 +13,6 @@
  * - GET /domain/*
  */
 
-import * as crypto from 'crypto';
 import {
   RegistrarProvider,
   ProviderConfig,
@@ -21,19 +20,6 @@ import {
   DomainInfo,
   ProviderCredentials,
 } from './provider.interface';
-
-/**
- * Endpoints API OVH selon la région
- */
-const OVH_ENDPOINTS: Record<string, string> = {
-  'ovh-eu': 'https://eu.api.ovh.com/1.0',
-  'ovh-ca': 'https://ca.api.ovh.com/1.0',
-  'ovh-us': 'https://api.us.ovhcloud.com/1.0',
-  'kimsufi-eu': 'https://eu.api.kimsufi.com/1.0',
-  'kimsufi-ca': 'https://ca.api.kimsufi.com/1.0',
-  'soyoustart-eu': 'https://eu.api.soyoustart.com/1.0',
-  'soyoustart-ca': 'https://ca.api.soyoustart.com/1.0',
-};
 
 /**
  * Réponse de l'API OVH pour /domain/{domain}/serviceInfos
@@ -102,38 +88,7 @@ export class OvhProvider implements RegistrarProvider {
   };
 
   /**
-   * Génère la signature HMAC pour une requête OVH
-   */
-  private generateSignature(
-    appSecret: string,
-    consumerKey: string,
-    method: string,
-    url: string,
-    body: string,
-    timestamp: number
-  ): string {
-    const toSign = `${appSecret}+${consumerKey}+${method}+${url}+${body}+${timestamp}`;
-    const hash = crypto.createHash('sha1').update(toSign).digest('hex');
-    return `$1$${hash}`;
-  }
-
-  /**
-   * Récupère le timestamp du serveur OVH (pour éviter les décalages d'horloge)
-   */
-  private async getServerTimestamp(baseUrl: string): Promise<number> {
-    try {
-      const response = await fetch(`${baseUrl}/auth/time`);
-      if (!response.ok) {
-        return Math.floor(Date.now() / 1000);
-      }
-      return await response.json();
-    } catch {
-      return Math.floor(Date.now() / 1000);
-    }
-  }
-
-  /**
-   * Effectue une requête authentifiée vers l'API OVH
+   * Effectue une requête via le proxy backend pour contourner CORS
    */
   private async request<T>(
     credentials: OvhCredentials,
@@ -141,40 +96,41 @@ export class OvhProvider implements RegistrarProvider {
     path: string,
     body: string = ''
   ): Promise<T> {
-    const endpoint = credentials.endpoint || 'ovh-eu';
-    const baseUrl = OVH_ENDPOINTS[endpoint] || OVH_ENDPOINTS['ovh-eu'];
-    const url = `${baseUrl}${path}`;
-
-    const timestamp = await this.getServerTimestamp(baseUrl);
-    const signature = this.generateSignature(
-      credentials.applicationSecret,
-      credentials.consumerKey,
-      method,
-      url,
-      body,
-      timestamp
-    );
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Ovh-Application': credentials.applicationKey,
-      'X-Ovh-Timestamp': timestamp.toString(),
-      'X-Ovh-Signature': signature,
-      'X-Ovh-Consumer': credentials.consumerKey,
-    };
-
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body || undefined,
+    const response = await fetch('/api/registrar-proxy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'ovh',
+        method,
+        path,
+        body: body || undefined,
+        credentials: {
+          applicationKey: credentials.applicationKey,
+          applicationSecret: credentials.applicationSecret,
+          consumerKey: credentials.consumerKey,
+          endpoint: credentials.endpoint || 'ovh-eu',
+        },
+      }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`OVH API error (${response.status}): ${errorText}`);
+      throw new Error(`Proxy error (${response.status}): ${errorText}`);
     }
 
-    return response.json();
+    const result = await response.json();
+
+    if (result.statusCode && result.statusCode >= 400) {
+      throw new Error(`OVH API error (${result.statusCode}): ${JSON.stringify(result.body)}`);
+    }
+
+    if (result.error) {
+      throw new Error(`OVH API error: ${JSON.stringify(result.data || result)}`);
+    }
+
+    return result.data as T;
   }
 
   /**

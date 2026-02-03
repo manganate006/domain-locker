@@ -16,7 +16,10 @@ export interface DnSimpleCredentials extends ProviderCredentials {
   apiToken: string;
 }
 
-const DNSIMPLE_API_URL = 'https://api.dnsimple.com/v2';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class DnSimpleProvider implements RegistrarProvider {
   readonly name = 'dnsimple';
@@ -47,14 +50,34 @@ export class DnSimpleProvider implements RegistrarProvider {
   };
 
   private async request<T>(credentials: DnSimpleCredentials, path: string): Promise<T> {
-    const response = await fetch(`${DNSIMPLE_API_URL}/${credentials.accountId}${path}`, {
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
       headers: {
-        'Authorization': `Bearer ${credentials.apiToken}`,
-        'Accept': 'application/json',
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        provider: 'dnsimple',
+        credentials: {
+          accountId: credentials.accountId,
+          apiToken: credentials.apiToken,
+        },
+        method: 'GET',
+        path,
+      }),
     });
-    if (!response.ok) throw new Error(`DNSimple API error: ${response.status}`);
-    return response.json();
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`DNSimple API error (${response.status}): ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`DNSimple API error: ${result.error}`);
+    }
+
+    return result.data as T;
   }
 
   async validateCredentials(credentials: ProviderCredentials): Promise<boolean> {

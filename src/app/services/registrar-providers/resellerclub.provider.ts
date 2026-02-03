@@ -16,7 +16,10 @@ export interface ResellerClubCredentials extends ProviderCredentials {
   apiKey: string;
 }
 
-const RESELLERCLUB_API_URL = 'https://httpapi.com/api';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class ResellerClubProvider implements RegistrarProvider {
   readonly name = 'resellerclub';
@@ -46,16 +49,34 @@ export class ResellerClubProvider implements RegistrarProvider {
   };
 
   private async request(credentials: ResellerClubCredentials, endpoint: string, params: Record<string, string> = {}): Promise<any> {
-    const queryParams = new URLSearchParams({
-      'auth-userid': credentials.resellerId,
-      'api-key': credentials.apiKey,
-      ...params,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'resellerclub',
+        credentials: {
+          resellerId: credentials.resellerId,
+          apiKey: credentials.apiKey,
+        },
+        path: endpoint,
+        params,
+      }),
     });
 
-    const response = await fetch(`${RESELLERCLUB_API_URL}${endpoint}?${queryParams.toString()}`);
-    if (!response.ok) throw new Error(`ResellerClub API error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ResellerClub API error (${response.status}): ${errorText}`);
+    }
 
-    const data = await response.json();
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`ResellerClub API error: ${result.error}`);
+    }
+
+    const data = result.data;
     if (data.status === 'ERROR') {
       throw new Error(`ResellerClub API error: ${data.message || 'Unknown'}`);
     }

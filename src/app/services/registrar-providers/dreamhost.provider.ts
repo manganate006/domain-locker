@@ -15,7 +15,10 @@ export interface DreamHostCredentials extends ProviderCredentials {
   apiKey: string;
 }
 
-const DREAMHOST_API_URL = 'https://api.dreamhost.com';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class DreamHostProvider implements RegistrarProvider {
   readonly name = 'dreamhost';
@@ -38,16 +41,32 @@ export class DreamHostProvider implements RegistrarProvider {
   };
 
   private async request(credentials: DreamHostCredentials, cmd: string): Promise<any> {
-    const params = new URLSearchParams({
-      key: credentials.apiKey,
-      cmd,
-      format: 'json',
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'dreamhost',
+        credentials: {
+          apiKey: credentials.apiKey,
+        },
+        command: cmd,
+      }),
     });
 
-    const response = await fetch(`${DREAMHOST_API_URL}/?${params.toString()}`);
-    if (!response.ok) throw new Error(`DreamHost API error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`DreamHost API error (${response.status}): ${errorText}`);
+    }
 
-    const data = await response.json();
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`DreamHost API error: ${result.error}`);
+    }
+
+    const data = result.data;
     if (data.result !== 'success') {
       throw new Error(`DreamHost API error: ${data.data || 'Unknown'}`);
     }

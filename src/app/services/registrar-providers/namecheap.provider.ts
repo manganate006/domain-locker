@@ -3,6 +3,7 @@
  *
  * Implémentation du provider pour l'API Namecheap.
  * Utilise l'authentification par API Key + Username + IP Whitelist.
+ * Les requêtes passent par le proxy backend pour contourner CORS.
  *
  * Documentation API Namecheap :
  * https://www.namecheap.com/support/api/intro/
@@ -26,9 +27,9 @@ export interface NamecheapCredentials extends ProviderCredentials {
 }
 
 /**
- * Base URL de l'API Namecheap
+ * URL du proxy backend pour contourner CORS
  */
-const NAMECHEAP_API_URL = 'https://api.namecheap.com/xml.response';
+const PROXY_URL = '/api/registrar-proxy';
 
 /**
  * Provider Namecheap pour l'import de domaines
@@ -126,38 +127,39 @@ export class NamecheapProvider implements RegistrarProvider {
   }
 
   /**
-   * Effectue une requête vers l'API Namecheap
+   * Effectue une requête vers l'API Namecheap via le proxy backend
    */
   private async request(credentials: NamecheapCredentials, command: string, params: Record<string, string> = {}): Promise<any> {
-    const queryParams = new URLSearchParams({
-      ApiUser: credentials.apiUser,
-      ApiKey: credentials.apiKey,
-      UserName: credentials.username,
-      ClientIp: credentials.clientIp,
-      Command: command,
-      ...params,
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'namecheap',
+        credentials: {
+          apiUser: credentials.apiUser,
+          apiKey: credentials.apiKey,
+          username: credentials.username,
+          clientIp: credentials.clientIp,
+        },
+        command,
+        params,
+      }),
     });
 
-    const url = `${NAMECHEAP_API_URL}?${queryParams.toString()}`;
-
-    const response = await fetch(url);
-
     if (!response.ok) {
-      throw new Error(`Namecheap API error (${response.status})`);
+      const errorText = await response.text();
+      throw new Error(`Namecheap API error (${response.status}): ${errorText}`);
     }
 
-    const xmlText = await response.text();
-    const result = this.parseXml(xmlText);
+    const result = await response.json();
 
-    if (result['@Status'] === 'ERROR') {
-      const errors = result.Errors?.Error;
-      const errorMsg = Array.isArray(errors)
-        ? errors.map((e: any) => e['#text'] || e).join(', ')
-        : errors?.['#text'] || errors || 'Unknown error';
-      throw new Error(`Namecheap API error: ${errorMsg}`);
+    if (result.error) {
+      throw new Error(`Namecheap API error: ${result.error}`);
     }
 
-    return result;
+    return result.data;
   }
 
   /**

@@ -3,6 +3,7 @@
  *
  * Implémentation du provider pour l'API Hostinger.
  * Utilise l'authentification Bearer Token.
+ * Les requêtes passent par le proxy backend pour contourner CORS.
  *
  * Basé sur le pattern de la PR #182 de DomainMOD :
  * https://github.com/domainmod/domainmod/pull/182
@@ -20,9 +21,9 @@ import {
 } from './provider.interface';
 
 /**
- * Base URL de l'API Hostinger
+ * URL du proxy backend pour contourner CORS
  */
-const HOSTINGER_API_URL = 'https://api.hostinger.com/v1';
+const PROXY_URL = '/api/registrar-proxy';
 
 /**
  * Réponse de l'API Hostinger pour la liste des domaines
@@ -75,7 +76,7 @@ export class HostingerProvider implements RegistrarProvider {
   };
 
   /**
-   * Effectue une requête authentifiée vers l'API Hostinger
+   * Effectue une requête authentifiée vers l'API Hostinger via le proxy backend
    */
   private async request<T>(
     credentials: HostingerCredentials,
@@ -83,18 +84,23 @@ export class HostingerProvider implements RegistrarProvider {
     path: string,
     body?: object
   ): Promise<T> {
-    const url = `${HOSTINGER_API_URL}${path}`;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${credentials.apiKey}`,
-    };
-
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
+    // Utiliser le proxy backend pour contourner CORS
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'hostinger',
+        credentials: {
+          apiKey: credentials.apiKey,
+        },
+        request: {
+          method,
+          path,
+          body: body ? JSON.stringify(body) : '',
+        },
+      }),
     });
 
     if (!response.ok) {
@@ -102,7 +108,22 @@ export class HostingerProvider implements RegistrarProvider {
       throw new Error(`Hostinger API error (${response.status}): ${errorText}`);
     }
 
-    return response.json();
+    const result = await response.json();
+
+    // Le proxy retourne { success, data } ou { statusCode, body: { error, data } }
+    if (result.error || result.statusCode >= 400) {
+      const errorData = result.body?.data || result.data || 'Unknown error';
+      const errorMsg = typeof errorData === 'string' && errorData.includes('<!DOCTYPE')
+        ? 'Hostinger API is temporarily unavailable (DNS error)'
+        : JSON.stringify(errorData);
+      throw new Error(`Hostinger API error: ${errorMsg}`);
+    }
+
+    if (!result.data) {
+      throw new Error('Hostinger API error: Empty response from proxy');
+    }
+
+    return result.data as T;
   }
 
   /**
@@ -112,7 +133,8 @@ export class HostingerProvider implements RegistrarProvider {
     try {
       const hostingerCreds = credentials as HostingerCredentials;
       // Tenter de récupérer la liste des domaines comme test
-      await this.request<HostingerDomainsResponse>(hostingerCreds, 'GET', '/domains');
+      // Endpoint officiel : /domains/v1/portfolio
+      await this.request<HostingerDomainsResponse>(hostingerCreds, 'GET', '/domains/v1/portfolio');
       return true;
     } catch {
       return false;
@@ -121,6 +143,7 @@ export class HostingerProvider implements RegistrarProvider {
 
   /**
    * Récupère tous les domaines avec pagination
+   * Endpoint officiel : GET /api/domains/v1/portfolio
    */
   private async fetchAllDomains(credentials: HostingerCredentials): Promise<HostingerDomain[]> {
     const allDomains: HostingerDomain[] = [];
@@ -128,16 +151,29 @@ export class HostingerProvider implements RegistrarProvider {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await this.request<HostingerDomainsResponse>(
+      const response = await this.request<HostingerDomainsResponse | HostingerDomain[]>(
         credentials,
         'GET',
-        `/domains?page=${page}&per_page=100`
+        `/domains/v1/portfolio?page=${page}&per_page=100`
       );
 
-      allDomains.push(...response.data);
+      // L'API peut retourner soit { data: [...], meta: {...} } soit directement [...]
+      const domainsArray = Array.isArray(response)
+        ? response
+        : Array.isArray(response.data)
+          ? response.data
+          : [];
 
-      if (response.meta) {
-        hasMore = page < response.meta.last_page;
+      if (domainsArray.length === 0 && page === 1) {
+        console.warn('[Hostinger] No domains array found in response:', JSON.stringify(response).slice(0, 200));
+      }
+
+      allDomains.push(...domainsArray);
+
+      // Gestion de la pagination - uniquement si response est un objet avec meta
+      const meta = !Array.isArray(response) ? response.meta : undefined;
+      if (meta) {
+        hasMore = page < meta.last_page;
         page++;
       } else {
         hasMore = false;
@@ -149,7 +185,8 @@ export class HostingerProvider implements RegistrarProvider {
       }
     }
 
-    return allDomains;
+    // Filtrer les domaines sans nom (pending_setup sans domain défini)
+    return allDomains.filter((d) => d.domain && d.domain.trim() !== '');
   }
 
   /**
@@ -178,6 +215,7 @@ export class HostingerProvider implements RegistrarProvider {
 
   /**
    * Récupère les informations détaillées d'un domaine
+   * Endpoint officiel : GET /api/domains/v1/portfolio/{domain}
    */
   async getDomainInfo(credentials: ProviderCredentials, domain: string): Promise<DomainInfo> {
     const hostingerCreds = credentials as HostingerCredentials;
@@ -187,7 +225,7 @@ export class HostingerProvider implements RegistrarProvider {
       const response = await this.request<{ data: HostingerDomain }>(
         hostingerCreds,
         'GET',
-        `/domains/${encodeURIComponent(domain)}`
+        `/domains/v1/portfolio/${encodeURIComponent(domain)}`
       );
 
       return this.toDomainInfo(response.data);

@@ -16,7 +16,10 @@ export interface NameComCredentials extends ProviderCredentials {
   apiToken: string;
 }
 
-const NAMECOM_API_URL = 'https://api.name.com/v4';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class NameComProvider implements RegistrarProvider {
   readonly name = 'namecom';
@@ -46,15 +49,34 @@ export class NameComProvider implements RegistrarProvider {
   };
 
   private async request<T>(credentials: NameComCredentials, path: string): Promise<T> {
-    const auth = btoa(`${credentials.username}:${credentials.apiToken}`);
-    const response = await fetch(`${NAMECOM_API_URL}${path}`, {
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
       headers: {
-        'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        provider: 'namecom',
+        credentials: {
+          username: credentials.username,
+          apiToken: credentials.apiToken,
+        },
+        method: 'GET',
+        path,
+      }),
     });
-    if (!response.ok) throw new Error(`Name.com API error: ${response.status}`);
-    return response.json();
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Name.com API error (${response.status}): ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`Name.com API error: ${result.error}`);
+    }
+
+    return result.data as T;
   }
 
   async validateCredentials(credentials: ProviderCredentials): Promise<boolean> {

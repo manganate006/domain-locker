@@ -16,7 +16,10 @@ export interface NameBrightCredentials extends ProviderCredentials {
   apiSecret: string;
 }
 
-const NAMEBRIGHT_API_URL = 'https://api.namebright.com/rest';
+/**
+ * URL du proxy backend pour contourner CORS
+ */
+const PROXY_URL = '/api/registrar-proxy';
 
 export class NameBrightProvider implements RegistrarProvider {
   readonly name = 'namebright';
@@ -45,15 +48,34 @@ export class NameBrightProvider implements RegistrarProvider {
   };
 
   private async request<T>(credentials: NameBrightCredentials, path: string): Promise<T> {
-    const auth = btoa(`${credentials.apiKey}:${credentials.apiSecret}`);
-    const response = await fetch(`${NAMEBRIGHT_API_URL}${path}`, {
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
       headers: {
-        'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        provider: 'namebright',
+        credentials: {
+          apiKey: credentials.apiKey,
+          apiSecret: credentials.apiSecret,
+        },
+        method: 'GET',
+        path,
+      }),
     });
-    if (!response.ok) throw new Error(`NameBright API error: ${response.status}`);
-    return response.json();
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`NameBright API error (${response.status}): ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(`NameBright API error: ${result.error}`);
+    }
+
+    return result.data as T;
   }
 
   async validateCredentials(credentials: ProviderCredentials): Promise<boolean> {

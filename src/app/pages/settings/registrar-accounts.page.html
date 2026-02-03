@@ -5,6 +5,73 @@
   Your API credentials are stored securely and used only for domain synchronization.
 </p>
 
+<!-- Autofetch Settings Section -->
+<p-card styleClass="mb-4" *ngIf="accounts.length > 0">
+  <ng-template pTemplate="header">
+    <div class="flex items-center justify-between p-4 pb-0">
+      <div class="flex items-center gap-2">
+        <i class="pi pi-sync text-xl"></i>
+        <span class="font-semibold">Automatic Sync (Cron)</span>
+      </div>
+      <p-tag
+        [value]="autoSyncCount + ' account(s) enabled'"
+        [severity]="autoSyncCount > 0 ? 'success' : 'secondary'"
+      />
+    </div>
+  </ng-template>
+
+  <div class="flex flex-col gap-4">
+    <p class="text-sm opacity-80">
+      Enable automatic synchronization to fetch new domains from your registrars on a schedule.
+      Add the cron command below to your server to run the sync automatically.
+    </p>
+
+    <!-- API Key Display -->
+    <div class="flex items-center gap-2">
+      <label class="text-sm font-medium">API Key:</label>
+      <code class="bg-surface-100 px-2 py-1 rounded text-sm font-mono flex-1">
+        {{ getMaskedApiKey() }}
+      </code>
+      <p-button
+        [icon]="showApiKey ? 'pi pi-eye-slash' : 'pi pi-eye'"
+        [outlined]="true"
+        size="small"
+        (onClick)="showApiKey = !showApiKey"
+        pTooltip="Show/Hide API Key"
+      />
+      <p-button
+        icon="pi pi-refresh"
+        [outlined]="true"
+        size="small"
+        severity="warning"
+        (onClick)="regenerateApiKey()"
+        [loading]="loading.apiKey"
+        pTooltip="Regenerate API Key"
+      />
+    </div>
+
+    <!-- Cron Command -->
+    <div class="flex items-center gap-2">
+      <label class="text-sm font-medium">Cron Command:</label>
+      <code class="bg-surface-100 px-2 py-1 rounded text-sm font-mono flex-1 truncate">
+        0 5 * * * curl -s -X POST "{{ autofetchApiKey ? 'YOUR_URL' : '...' }}/api/registrar-autofetch?key=..."
+      </code>
+      <p-button
+        icon="pi pi-copy"
+        [outlined]="true"
+        size="small"
+        (onClick)="copyCronCommand()"
+        [disabled]="!autofetchApiKey"
+        pTooltip="Copy cron command"
+      />
+    </div>
+
+    <p class="text-xs opacity-60">
+      This cron runs daily at 05:00. Only accounts with "Auto-sync" enabled will be synchronized.
+    </p>
+  </div>
+</p-card>
+
 <!-- Add Account Button -->
 <div class="mb-4">
   <p-button
@@ -47,6 +114,16 @@
       <div class="text-sm">
         <span class="opacity-70">Last Sync:</span>
         <span class="ml-2">{{ formatDate(account.last_sync_at) }}</span>
+      </div>
+
+      <!-- Auto-sync toggle -->
+      <div class="flex items-center justify-between mt-2 pt-2 border-t border-surface-100">
+        <span class="text-sm opacity-70">Auto-sync:</span>
+        <p-inputSwitch
+          [(ngModel)]="account.auto_sync"
+          (onChange)="toggleAutoSync(account)"
+          [disabled]="loading.toggleSync"
+        />
       </div>
     </div>
 

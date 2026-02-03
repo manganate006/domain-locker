@@ -18,6 +18,7 @@ export interface DbRegistrarAccount {
   provider_name: ProviderName;
   label: string | null;
   credentials: ProviderCredentials;
+  auto_sync: boolean;
   created_at: string;
   updated_at: string;
   last_sync_at: string | null;
@@ -30,6 +31,7 @@ export interface SaveRegistrarAccountData {
   provider_name: ProviderName;
   label?: string;
   credentials: ProviderCredentials;
+  auto_sync?: boolean;
 }
 
 /**
@@ -48,7 +50,7 @@ export class RegistrarAccountsQueries {
    */
   getAccounts(): Observable<DbRegistrarAccount[]> {
     const query = `
-      SELECT id, user_id, provider_name, label, credentials,
+      SELECT id, user_id, provider_name, label, credentials, auto_sync,
              created_at, updated_at, last_sync_at
       FROM registrar_accounts
       WHERE user_id = $1
@@ -66,7 +68,7 @@ export class RegistrarAccountsQueries {
    */
   getAccountById(accountId: string): Observable<DbRegistrarAccount | null> {
     const query = `
-      SELECT id, user_id, provider_name, label, credentials,
+      SELECT id, user_id, provider_name, label, credentials, auto_sync,
              created_at, updated_at, last_sync_at
       FROM registrar_accounts
       WHERE id = $1 AND user_id = $2
@@ -83,7 +85,7 @@ export class RegistrarAccountsQueries {
    */
   getAccountsByProvider(providerName: ProviderName): Observable<DbRegistrarAccount[]> {
     const query = `
-      SELECT id, user_id, provider_name, label, credentials,
+      SELECT id, user_id, provider_name, label, credentials, auto_sync,
              created_at, updated_at, last_sync_at
       FROM registrar_accounts
       WHERE user_id = $1 AND provider_name = $2
@@ -103,9 +105,9 @@ export class RegistrarAccountsQueries {
    */
   createAccount(data: SaveRegistrarAccountData): Observable<DbRegistrarAccount> {
     const query = `
-      INSERT INTO registrar_accounts (user_id, provider_name, label, credentials)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, user_id, provider_name, label, credentials,
+      INSERT INTO registrar_accounts (user_id, provider_name, label, credentials, auto_sync)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, user_id, provider_name, label, credentials, auto_sync,
                 created_at, updated_at, last_sync_at
     `;
 
@@ -114,6 +116,7 @@ export class RegistrarAccountsQueries {
       data.provider_name,
       data.label || null,
       JSON.stringify(data.credentials),
+      data.auto_sync ?? false,
     ];
 
     return from(this.pgApiUtil.postToPgExecutor<DbRegistrarAccount>(query, params)).pipe(
@@ -145,6 +148,11 @@ export class RegistrarAccountsQueries {
       params.push(JSON.stringify(data.credentials));
     }
 
+    if (data.auto_sync !== undefined) {
+      updates.push(`auto_sync = $${paramIndex++}`);
+      params.push(data.auto_sync);
+    }
+
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
     params.push(accountId);
@@ -154,7 +162,7 @@ export class RegistrarAccountsQueries {
       UPDATE registrar_accounts
       SET ${updates.join(', ')}
       WHERE id = $${paramIndex++} AND user_id = $${paramIndex}
-      RETURNING id, user_id, provider_name, label, credentials,
+      RETURNING id, user_id, provider_name, label, credentials, auto_sync,
                 created_at, updated_at, last_sync_at
     `;
 
@@ -224,6 +232,63 @@ export class RegistrarAccountsQueries {
         });
         return counts as Record<ProviderName, number>;
       }),
+      catchError((error) => this.handleError(error))
+    );
+  }
+
+  /**
+   * Active/désactive l'auto_sync pour un compte
+   */
+  toggleAutoSync(accountId: string, autoSync: boolean): Observable<DbRegistrarAccount> {
+    return this.updateAccount(accountId, { auto_sync: autoSync });
+  }
+
+  /**
+   * Récupère la clé API pour l'autofetch
+   */
+  getAutofetchApiKey(): Observable<string | null> {
+    const query = `SELECT api_key FROM autofetch_settings LIMIT 1`;
+
+    return from(this.pgApiUtil.postToPgExecutor<{ api_key: string }>(query, [])).pipe(
+      map((response) => response.data[0]?.api_key || null),
+      catchError((error) => this.handleError(error))
+    );
+  }
+
+  /**
+   * Régénère la clé API pour l'autofetch
+   */
+  regenerateAutofetchApiKey(): Observable<string> {
+    const query = `
+      UPDATE autofetch_settings
+      SET api_key = encode(gen_random_bytes(32), 'hex')
+      WHERE id = (SELECT id FROM autofetch_settings LIMIT 1)
+      RETURNING api_key
+    `;
+
+    return from(this.pgApiUtil.postToPgExecutor<{ api_key: string }>(query, [])).pipe(
+      map((response) => {
+        if (!response.data[0]?.api_key) {
+          throw new Error('Failed to regenerate API key');
+        }
+        return response.data[0].api_key;
+      }),
+      catchError((error) => this.handleError(error))
+    );
+  }
+
+  /**
+   * Compte le nombre de comptes avec auto_sync activé
+   */
+  getAutoSyncCount(): Observable<number> {
+    const query = `
+      SELECT COUNT(*) as count
+      FROM registrar_accounts
+      WHERE user_id = $1 AND auto_sync = true
+    `;
+
+    return from(this.pgApiUtil.postToPgExecutor<{ count: number }>(query, [this.userId])).pipe(
+      map((response) => Number(response.data[0]?.count || 0)),
       catchError((error) => this.handleError(error))
     );
   }
