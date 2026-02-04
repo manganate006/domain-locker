@@ -1,0 +1,42 @@
+# Dockerfile.prebuilt - Uses pre-built dist/ artifacts (no build step)
+# Use this when the build is done outside Docker to avoid OOM issues
+
+FROM node:20.12.0-alpine AS runner
+
+# Install PostgreSQL client for pg_isready and psql
+RUN apk add --no-cache postgresql-client
+
+# Create non-root app user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Set working directory
+WORKDIR /app
+
+# Copy pre-built artifacts
+COPY --chown=appuser:appgroup dist ./dist
+COPY --chown=appuser:appgroup package.json ./package.json
+COPY --chown=appuser:appgroup db/schema.sql ./schema.sql
+COPY --chown=appuser:appgroup start.sh ./start.sh
+
+# Install only production dependencies
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 2000 && \
+    npm config set fetch-retry-maxtimeout 60000 && \
+    for i in 1 2 3; do npm install --omit=dev --legacy-peer-deps && break || sleep 20; done
+
+# Switch to the app user
+USER appuser
+
+# Expose application port
+EXPOSE 3000
+
+# Set environment variables
+ENV DL_ENV_TYPE="selfHosted"
+
+# Healthcheck
+HEALTHCHECK --interval=15s --timeout=2s --start-period=5s --retries=5 \
+  CMD wget --spider -q http://localhost:3000/api/health || exit 1
+
+# Run the start script
+CMD ["./start.sh"]
