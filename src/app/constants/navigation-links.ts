@@ -276,6 +276,12 @@ export const authenticatedNavLinks = [
     routerLink: '/stats',
     // items: statsLinks,
   },
+  {
+    label: 'Settings',
+    icon: 'pi pi-fw pi-cog',
+    routerLink: '/settings',
+    items: settingsLinks,
+  },
 ];
 
 export const unauthenticatedNavLinks = [

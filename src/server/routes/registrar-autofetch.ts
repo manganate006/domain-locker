@@ -11,6 +11,7 @@
  */
 
 import { defineEventHandler, getQuery } from 'h3';
+import { sendWebhookNotification } from './domain-updater/lib/sendWebhookNotification';
 
 const DOMAIN_IMPORT_DELAY = 100; // ms between domains
 
@@ -473,6 +474,12 @@ async function syncAccount(
           status: 'imported',
           message: importResult.message,
         });
+        // Envoyer notification pour nouveau domaine importé
+        await sendWebhookNotification(
+          `New domain imported: ${domain.domain_name} (from ${registrarName})`,
+          'Domain Locker - Autofetch',
+          ['domain_imported', 'autofetch']
+        );
       } else if (importResult.message === 'Domain already exists') {
         result.skipped++;
         result.details.push({
@@ -503,6 +510,12 @@ async function syncAccount(
       status: 'error',
       message: error.message || 'Sync failed',
     });
+    // Notifier l'erreur de fetch du provider
+    await sendWebhookNotification(
+      `Autofetch error for ${account.provider_name}${account.label ? ` (${account.label})` : ''}: ${error.message || 'Sync failed'}`,
+      'Domain Locker - Autofetch Error',
+      ['autofetch_error', 'error']
+    );
   }
 
   return result;
@@ -559,6 +572,15 @@ export default defineEventHandler(async (event) => {
     totalImported += accountResult.imported;
     totalSkipped += accountResult.skipped;
     totalErrors += accountResult.errors;
+  }
+
+  // Notification de résumé (seulement si des imports ou des erreurs)
+  if (totalImported > 0 || totalErrors > 0) {
+    await sendWebhookNotification(
+      `Autofetch completed: ${totalImported} imported, ${totalSkipped} skipped, ${totalErrors} errors`,
+      'Domain Locker - Autofetch Summary',
+      ['autofetch_summary']
+    );
   }
 
   return {

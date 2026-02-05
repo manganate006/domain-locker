@@ -42,12 +42,13 @@ export const features: FeatureDefinitions = {
       pro: 100,
       enterprise: 1000,
     },
-    selfHosted: 500,
+    selfHosted: 999999,
     dev: 100,
     demo: 25,
   },
   notificationChannels: {
     default: false,
+    selfHosted: true,
     managed: {
       free: false,
       hobby: true,
@@ -57,6 +58,7 @@ export const features: FeatureDefinitions = {
   },
   changeNotifications: {
     default: false,
+    selfHosted: true,
     dev: true,
     managed: {
       free: false,
