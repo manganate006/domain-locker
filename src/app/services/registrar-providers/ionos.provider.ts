@@ -2,14 +2,16 @@
  * IONOS Registrar Provider
  *
  * Implémentation du provider pour l'API IONOS.
- * Utilise un proxy backend pour contourner les restrictions CORS.
+ * Utilise l'API DNS pour lister les zones (= domaines).
+ * L'API Domains nécessite une activation spéciale.
  *
  * Documentation API IONOS :
- * - https://developer.hosting.ionos.com/docs/domains
+ * - DNS API: https://developer.hosting.ionos.com/docs/dns
+ * - Domains API: https://developer.hosting.ionos.com/docs/domains
  *
  * Authentification :
  * - Header X-API-Key avec format "prefix.secret"
- * - Création de clé API : https://my.ionos.com/shop/api-key
+ * - Création de clé API : https://developer.hosting.ionos.fr/docs/getstarted
  */
 
 import {
@@ -27,7 +29,16 @@ export interface IonosCredentials extends ProviderCredentials {
 }
 
 /**
- * Réponse de l'API IONOS pour /domains/v1/domains
+ * Réponse de l'API DNS IONOS pour /dns/v1/zones
+ */
+interface IonosZoneInfo {
+  id: string;
+  name: string;
+  type: string;
+}
+
+/**
+ * Réponse de l'API Domains IONOS (si activée)
  */
 interface IonosDomainInfo {
   name: string;
@@ -106,11 +117,13 @@ export class IonosProvider implements RegistrarProvider {
 
   /**
    * Vérifie si les credentials sont valides
+   * Utilise l'API DNS car l'API Domains nécessite une activation spéciale
    */
   async validateCredentials(credentials: ProviderCredentials): Promise<boolean> {
     try {
       const ionosCreds = credentials as IonosCredentials;
-      await this.request<IonosDomainInfo[]>(ionosCreds, 'GET', '/domains/v1/domains');
+      // Essaie d'abord l'API DNS (plus courante)
+      await this.request<IonosZoneInfo[]>(ionosCreds, 'GET', '/dns/v1/zones');
       return true;
     } catch {
       return false;
@@ -118,57 +131,36 @@ export class IonosProvider implements RegistrarProvider {
   }
 
   /**
-   * Récupère la liste des domaines
+   * Récupère la liste des domaines via l'API DNS (zones)
    */
   async getDomainList(credentials: ProviderCredentials): Promise<string[]> {
     const ionosCreds = credentials as IonosCredentials;
-    const domains = await this.request<IonosDomainInfo[]>(ionosCreds, 'GET', '/domains/v1/domains');
-    return domains.map((d) => d.name || d.domain || '').filter(Boolean);
+    const zones = await this.request<IonosZoneInfo[]>(ionosCreds, 'GET', '/dns/v1/zones');
+    return zones.map((z) => z.name).filter(Boolean);
   }
 
   /**
    * Récupère les informations détaillées d'un domaine
+   * L'API DNS ne fournit pas les dates d'expiration
    */
   async getDomainInfo(credentials: ProviderCredentials, domain: string): Promise<DomainInfo> {
-    const ionosCreds = credentials as IonosCredentials;
-
-    try {
-      const domainInfo = await this.request<IonosDomainInfo>(
-        ionosCreds,
-        'GET',
-        `/domains/v1/domains/${encodeURIComponent(domain)}`
-      );
-
-      return {
-        domain_name: domainInfo.name || domainInfo.domain || domain,
-        expiry_date: domainInfo.expirationDate ? new Date(domainInfo.expirationDate) : null,
-        registration_date: domainInfo.registrationDate ? new Date(domainInfo.registrationDate) : null,
-        auto_renew: domainInfo.autoRenew,
-        status: domainInfo.status,
-        registrar_name: 'IONOS',
-      };
-    } catch {
-      return {
-        domain_name: domain,
-        expiry_date: null,
-        registrar_name: 'IONOS',
-      };
-    }
+    return {
+      domain_name: domain,
+      expiry_date: null, // L'API DNS ne fournit pas cette info
+      registrar_name: 'IONOS',
+    };
   }
 
   /**
-   * Récupère les informations de tous les domaines
+   * Récupère les informations de tous les domaines via l'API DNS
    */
   async getAllDomainsInfo(credentials: ProviderCredentials): Promise<DomainInfo[]> {
     const ionosCreds = credentials as IonosCredentials;
-    const domains = await this.request<IonosDomainInfo[]>(ionosCreds, 'GET', '/domains/v1/domains');
+    const zones = await this.request<IonosZoneInfo[]>(ionosCreds, 'GET', '/dns/v1/zones');
 
-    return domains.map((d) => ({
-      domain_name: d.name || d.domain || '',
-      expiry_date: d.expirationDate ? new Date(d.expirationDate) : null,
-      registration_date: d.registrationDate ? new Date(d.registrationDate) : null,
-      auto_renew: d.autoRenew,
-      status: d.status,
+    return zones.map((z) => ({
+      domain_name: z.name,
+      expiry_date: null, // L'API DNS ne fournit pas cette info
       registrar_name: 'IONOS',
     }));
   }

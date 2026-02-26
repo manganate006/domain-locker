@@ -415,6 +415,7 @@ async function fetchDomainsViaProxy(
     }
 
     case 'ionos': {
+      // Utilise l'API DNS (zones) car l'API Domains nécessite une activation spéciale
       const response = await fetch(`${baseUrl}/api/registrar-proxy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -422,19 +423,19 @@ async function fetchDomainsViaProxy(
           provider: 'ionos',
           credentials,
           method: 'GET',
-          path: '/domains/v1/domains',
+          path: '/dns/v1/zones',
         }),
       });
       const result = await response.json();
       if (!result.success) {
-        throw new Error(result.data?.message || 'Failed to fetch IONOS domains');
+        throw new Error(result.data?.message || 'Failed to fetch IONOS zones');
       }
-      const domainsArray = Array.isArray(result.data) ? result.data : [];
-      for (const d of domainsArray) {
+      const zonesArray = Array.isArray(result.data) ? result.data : [];
+      for (const z of zonesArray) {
         domains.push({
-          domain_name: d.name || d.domain,
-          expiry_date: d.expirationDate ? new Date(d.expirationDate) : null,
-          registration_date: d.registrationDate ? new Date(d.registrationDate) : null,
+          domain_name: z.name,
+          expiry_date: null, // L'API DNS ne fournit pas les dates d'expiration
+          registration_date: null,
         });
       }
       break;
