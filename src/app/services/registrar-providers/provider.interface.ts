@@ -141,4 +141,5 @@ export type ProviderName =
   | 'opensrs'
   | 'resellerclub'
   | 'dnsimple'
-  | 'abovecom';
+  | 'abovecom'
+  | 'ionos';

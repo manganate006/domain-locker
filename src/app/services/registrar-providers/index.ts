@@ -30,6 +30,7 @@ import { opensrsProvider } from './opensrs.provider';
 import { resellerclubProvider } from './resellerclub.provider';
 import { dnsimpleProvider } from './dnsimple.provider';
 import { abovecomProvider } from './abovecom.provider';
+import { ionosProvider } from './ionos.provider';
 
 // Re-export des interfaces et types
 export * from './provider.interface';
@@ -56,6 +57,7 @@ providers.set('opensrs', opensrsProvider);
 providers.set('resellerclub', resellerclubProvider);
 providers.set('dnsimple', dnsimpleProvider);
 providers.set('abovecom', abovecomProvider);
+providers.set('ionos', ionosProvider);
 
 /**
  * Récupère un provider par son nom
@@ -124,3 +126,4 @@ export { opensrsProvider } from './opensrs.provider';
 export { resellerclubProvider } from './resellerclub.provider';
 export { dnsimpleProvider } from './dnsimple.provider';
 export { abovecomProvider } from './abovecom.provider';
+export { ionosProvider } from './ionos.provider';

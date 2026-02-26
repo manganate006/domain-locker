@@ -761,6 +761,50 @@ async function proxyAbovecomRequest(
 }
 
 /**
+ * Proxy pour les appels API IONOS
+ * Documentation: https://developer.hosting.ionos.com/docs/domains
+ * Auth: X-API-Key header avec format "prefix.secret"
+ */
+async function proxyIonosRequest(
+  credentials: { apiKey: string },
+  method: string,
+  path: string,
+  body: string = ''
+): Promise<{ status: number; data: unknown }> {
+  const baseUrl = 'https://api.hosting.ionos.com';
+  const url = `${baseUrl}${path}`;
+
+  console.log(`[registrar-proxy] IONOS ${method} ${url}`);
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-API-Key': credentials.apiKey,
+  };
+
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: body || undefined,
+  });
+
+  console.log(`[registrar-proxy] IONOS response status: ${response.status}`);
+
+  const responseData = await response.text();
+  let parsedData: unknown;
+
+  try {
+    parsedData = JSON.parse(responseData);
+  } catch {
+    parsedData = responseData;
+  }
+
+  return {
+    status: response.status,
+    data: parsedData,
+  };
+}
+
+/**
  * Handler principal du proxy
  */
 export default defineEventHandler(async (event) => {
@@ -888,6 +932,10 @@ export default defineEventHandler(async (event) => {
 
       case 'abovecom':
         result = await proxyAbovecomRequest(credentials, path, body.params || {});
+        break;
+
+      case 'ionos':
+        result = await proxyIonosRequest(credentials, method, path, requestBody);
         break;
 
       default:

@@ -12,6 +12,7 @@
 
 import { defineEventHandler, getQuery } from 'h3';
 import { sendWebhookNotification } from './domain-updater/lib/sendWebhookNotification';
+import { sendCronSummaryNotification } from './domain-updater/lib/sendCronSummary';
 
 const DOMAIN_IMPORT_DELAY = 100; // ms between domains
 
@@ -35,6 +36,7 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   resellerclub: 'ResellerClub',
   dnsimple: 'DNSimple',
   abovecom: 'Above.com',
+  ionos: 'IONOS',
 };
 
 /**
@@ -412,6 +414,32 @@ async function fetchDomainsViaProxy(
       break;
     }
 
+    case 'ionos': {
+      const response = await fetch(`${baseUrl}/api/registrar-proxy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'ionos',
+          credentials,
+          method: 'GET',
+          path: '/domains/v1/domains',
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.data?.message || 'Failed to fetch IONOS domains');
+      }
+      const domainsArray = Array.isArray(result.data) ? result.data : [];
+      for (const d of domainsArray) {
+        domains.push({
+          domain_name: d.name || d.domain,
+          expiry_date: d.expirationDate ? new Date(d.expirationDate) : null,
+          registration_date: d.registrationDate ? new Date(d.registrationDate) : null,
+        });
+      }
+      break;
+    }
+
     default:
       throw new Error(`Provider "${providerName}" is not supported for autofetch`);
   }
@@ -574,7 +602,7 @@ export default defineEventHandler(async (event) => {
     totalErrors += accountResult.errors;
   }
 
-  // Notification de résumé (seulement si des imports ou des erreurs)
+  // Notification webhook (seulement si des imports ou des erreurs)
   if (totalImported > 0 || totalErrors > 0) {
     await sendWebhookNotification(
       `Autofetch completed: ${totalImported} imported, ${totalSkipped} skipped, ${totalErrors} errors`,
@@ -582,6 +610,15 @@ export default defineEventHandler(async (event) => {
       ['autofetch_summary']
     );
   }
+
+  // Notification Telegram (toujours, même sans changement)
+  await sendCronSummaryNotification(baseUrl, {
+    endpoint: 'registrar-autofetch',
+    accounts: accounts.length,
+    imported: totalImported,
+    skipped: totalSkipped,
+    errors: totalErrors,
+  });
 
   return {
     success: true,
