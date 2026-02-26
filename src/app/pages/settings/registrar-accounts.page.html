@@ -220,6 +220,9 @@
         optionValue="name"
         placeholder="Select a registrar"
         styleClass="w-full"
+        appendTo="body"
+        [filter]="true"
+        filterPlaceholder="Search registrar..."
         (onChange)="onProviderChange($event.value)"
       />
     </div>
