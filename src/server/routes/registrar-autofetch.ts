@@ -415,28 +415,53 @@ async function fetchDomainsViaProxy(
     }
 
     case 'ionos': {
-      // Utilise l'API DNS (zones) car l'API Domains nécessite une activation spéciale
-      const response = await fetch(`${baseUrl}/api/registrar-proxy`, {
+      // 1. Récupérer la liste des domaines via l'API Domains
+      const listResponse = await fetch(`${baseUrl}/api/registrar-proxy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: 'ionos',
           credentials,
           method: 'GET',
-          path: '/dns/v1/zones',
+          path: '/domains/v1/domainitems',
         }),
       });
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.data?.message || 'Failed to fetch IONOS zones');
+      const listResult = await listResponse.json();
+      if (!listResult.success) {
+        throw new Error(listResult.data?.message || 'Failed to fetch IONOS domains');
       }
-      const zonesArray = Array.isArray(result.data) ? result.data : [];
-      for (const z of zonesArray) {
-        domains.push({
-          domain_name: z.name,
-          expiry_date: null, // L'API DNS ne fournit pas les dates d'expiration
-          registration_date: null,
-        });
+
+      // 2. Récupérer les détails de chaque domaine
+      const domainsList = listResult.data?.domains || [];
+      for (const d of domainsList) {
+        try {
+          const detailResponse = await fetch(`${baseUrl}/api/registrar-proxy`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              provider: 'ionos',
+              credentials,
+              method: 'GET',
+              path: `/domains/v1/domainitems/${d.id}`,
+            }),
+          });
+          const detailResult = await detailResponse.json();
+          if (detailResult.success && detailResult.data) {
+            const detail = detailResult.data;
+            domains.push({
+              domain_name: detail.name,
+              expiry_date: detail.expirationDate ? new Date(detail.expirationDate) : null,
+              registration_date: null,
+            });
+          }
+        } catch {
+          // En cas d'erreur sur un domaine, continuer avec les autres
+          domains.push({
+            domain_name: d.name,
+            expiry_date: null,
+            registration_date: null,
+          });
+        }
       }
       break;
     }

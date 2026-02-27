@@ -300,16 +300,16 @@ export default class RegistrarAccountsPage implements OnInit {
 
   /**
    * Toggle auto_sync for an account
+   * Note: ngModel already changed account.auto_sync, so we use it directly
    */
   toggleAutoSync(account: DbRegistrarAccount): void {
     this.loading.toggleSync = true;
-    const newValue = !account.auto_sync;
+    const newValue = account.auto_sync; // ngModel already set this value
 
     this.databaseService.instance.registrarAccountsQueries
       .toggleAutoSync(account.id, newValue)
       .subscribe({
         next: () => {
-          account.auto_sync = newValue;
           this.autoSyncCount = this.accounts.filter((a) => a.auto_sync).length;
           this.messageService.showSuccess(
             'Success',
@@ -318,6 +318,8 @@ export default class RegistrarAccountsPage implements OnInit {
           this.loading.toggleSync = false;
         },
         error: (error: Error) => {
+          // Revert the switch on error
+          account.auto_sync = !newValue;
           this.errorHandler.handleError({
             error,
             message: 'Failed to toggle auto-sync',
